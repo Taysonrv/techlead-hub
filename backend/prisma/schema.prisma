@@ -1,11 +1,9 @@
 generator client {
   provider = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // =========================================================
@@ -60,9 +58,12 @@ model User {
   // Autenticação
   passwordHash String
   role         UserRole @default(ANALISTA)
+  jobFunction  String?  @db.VarChar(40)
+  movideskOwnerName String? @db.VarChar(200)
 
   // Controle de acesso
   permissions        Json?
+  weatherCity        String?  @db.VarChar(120)
   active             Boolean @default(false)
   mustChangePassword Boolean @default(false)
 
@@ -82,6 +83,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relacionamentos
+  authoredIncidentActions ChatIncidentAction[] @relation("IncidentActionAuthor")
+  assignedIncidentActions ChatIncidentAction[] @relation("IncidentActionAssignee")
   sessions            UserSession[]
   passwordResetTokens PasswordResetToken[]
   importRuns          ImportRun[]
@@ -97,6 +100,7 @@ model User {
 
   @@index([name])
   @@index([role])
+  @@index([jobFunction])
   @@index([active])
   @@index([approvalStatus])
   @@index([approvedById])
@@ -109,6 +113,17 @@ model ChatOnlineEvent {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([occurredAt(sort: Desc)])
+}
+
+// Durable per-user event cursor for reconnects and multiple backend instances.
+model ChatDeliveryEvent {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int
+  channelId Int?
+  createdAt DateTime @default(now())
+
+  @@index([userId, id])
+  @@index([createdAt])
 }
 
 model ChatChannel {
@@ -124,6 +139,8 @@ model ChatChannel {
   updatedAt   DateTime @updatedAt
   members     ChatChannelMember[]
   messages    ChatMessage[]
+  incidentActions ChatIncidentAction[]
+  attachments ChatAttachment[]
 
   @@index([type, archivedAt])
   @@index([contextType, contextId])
@@ -143,6 +160,9 @@ model ChatChannelMember {
 }
 
 model ChatMessage {
+  kind      String @default("TEXT") @db.VarChar(24)
+  payload   Json?
+  clientMessageId String? @db.VarChar(80)
   id        Int @id @default(autoincrement())
   channelId Int
   authorId  Int
@@ -155,13 +175,53 @@ model ChatMessage {
   author    User @relation("ChatMessageAuthor", fields: [authorId], references: [id], onDelete: Restrict)
   parent    ChatMessage? @relation("ChatMessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
   replies   ChatMessage[] @relation("ChatMessageReplies")
+  attachment ChatAttachment?
 
   @@index([channelId, createdAt])
+  @@unique([channelId, authorId, clientMessageId])
   @@index([authorId, createdAt])
   @@index([parentId])
 }
 
 
+model ChatAttachment {
+  id        Int @id @default(autoincrement())
+  channelId Int
+  messageId Int @unique
+  name      String @db.VarChar(180)
+  mimeType  String @db.VarChar(100)
+  size      Int
+  sha256    String @db.VarChar(64)
+  storage   String @default("DATABASE") @db.VarChar(32)
+  data      Bytes
+  createdAt DateTime @default(now())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  @@index([channelId, createdAt])
+}
+
+model ChatIncidentAction {
+  id          Int      @id @default(autoincrement())
+  channelId   Int
+  authorId    Int
+  kind        String   @db.VarChar(24)
+  title       String   @db.VarChar(200)
+  details     String?  @db.VarChar(2000)
+  status      String   @default("OPEN") @db.VarChar(24)
+  assigneeId  Int?
+  dueAt       DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  closedAt    DateTime?
+  channel ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author User @relation("IncidentActionAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  assignee User? @relation("IncidentActionAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@index([channelId, createdAt])
+  @@index([assigneeId, status])
+}
+
+// =========================================================
 // =========================================================
 // CALENDÁRIO / REUNIÕES
 // =========================================================
@@ -345,6 +405,7 @@ model Ticket {
   // Identificação Movidesk
   movideskId Int     @unique
   protocol   String?
+  ticketType Int? // Movidesk: 1 = Interno; 2 = Público
 
   // Atendimento
   subject       String
@@ -446,6 +507,7 @@ model Ticket {
   actions MovideskTicketAction[]
   ownerHistories MovideskOwnerHistory[]
   statusHistories MovideskStatusHistory[]
+  categorySnapshots MovideskCategorySnapshot[]
   movideskEnrichment MovideskTicketEnrichment?
 
   // Auditoria
@@ -486,6 +548,27 @@ model Ticket {
 // =========================================================
 // AÇÕES E APONTAMENTOS MOVIDESK
 // =========================================================
+
+// Observações reais de categoria capturadas pelo HUB.
+// A primeira observação NÃO comprova a categoria na abertura do ticket.
+// observedAt = momento da captura; sourceLastUpdate = atualização remota,
+// que não representa necessariamente o instante da mudança de categoria.
+model MovideskCategorySnapshot {
+  id Int @id @default(autoincrement())
+  ticketId Int
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sequenceKey String @db.VarChar(64)
+  kind String @db.VarChar(20)
+  category String @db.VarChar(128)
+  previousCategory String? @db.VarChar(128)
+  source String @db.VarChar(40)
+  observedAt DateTime @default(now())
+  sourceLastUpdate DateTime?
+
+  @@unique([ticketId, sequenceKey])
+  @@index([ticketId, observedAt])
+  @@index([kind, category])
+}
 
 model MovideskTicketEnrichment {
   id Int @id @default(autoincrement())
@@ -932,4 +1015,68 @@ model TeamsAlertOutbox {
   @@unique([movideskId, eventType])
   @@index([status, nextAttemptAt])
   @@index([lockedUntil])
+}
+
+// Fila separada para os novos processos de notificação Teams (carteira SIMER/Azure).
+// eventKey identifica a inserção ou revisão de estado e permite reentradas em Registro.
+model TeamsWorkflowOutbox {
+  id             String           @id @default(cuid())
+  eventKey       String           @unique @db.VarChar(180)
+  eventType      String           @db.VarChar(40)
+  movideskId     Int
+  azureWorkItemId Int?
+  payload        Json
+  status         TeamsAlertStatus @default(PENDING)
+  attempts       Int              @default(0)
+  nextAttemptAt  DateTime         @default(now())
+  lockedUntil    DateTime?
+  sentAt         DateTime?
+  lastHttpStatus Int?
+  lastError      String?          @db.VarChar(500)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([lockedUntil])
+  @@index([eventType, createdAt])
+  @@index([movideskId])
+  @@index([azureWorkItemId])
+}
+
+
+// Registro compartilhado das reuniões de resultados, independente de dispositivo.
+model TeamResultsMeeting {
+  id          Int      @id @default(autoincrement())
+  meetingDate DateTime @unique @db.Date
+  title       String   @db.VarChar(200)
+  notes       String   @default("") @db.Text
+  snapshot    Json?
+  goals       Json
+  highlights  Json
+  actions     Json
+  version     Int      @default(1)
+  createdById Int
+  updatedById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+model LeadershipOkrEvidence {
+  id          Int      @id @default(autoincrement())
+  deliverable String   @db.VarChar(40)
+  title       String   @db.VarChar(200)
+  description String   @db.Text
+  evidenceUrl String?  @db.VarChar(1000)
+  owner       String   @db.VarChar(200)
+  status      String   @default("PLANNED") @db.VarChar(24)
+  dueDate     DateTime? @db.Date
+  createdById Int
+  updatedById Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([deliverable, status])
+  @@index([dueDate])
 }

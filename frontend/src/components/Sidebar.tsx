@@ -30,6 +30,8 @@ import {
   BugReportOutlined,
   ConfirmationNumberOutlined,
   ExpandMoreRounded,
+  ChevronLeftRounded,
+  ChevronRightRounded,
   ExpandLessRounded,
   InfoOutlined,
   Inventory2Outlined,
@@ -59,6 +61,8 @@ import {
   DoneAllRounded,
   InsightsOutlined,
   SpeedOutlined,
+  StarOutlineRounded,
+  StarRounded,
 } from "@mui/icons-material";
 
 import {
@@ -101,6 +105,7 @@ import {
   NotificationCenter,
 } from "./NotificationCenter";
 import { TopBarActionButton } from "./TopBarActionButton";
+import { readFavorites, toggleFavorite, type Favorite } from "../utils/favorites";
 
 /* =========================================================
    CONFIGURAÇÃO
@@ -143,11 +148,65 @@ export function Sidebar() {
   } =
     useAuth();
   const userId = user?.id ?? null;
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  useEffect(() => {
+    if (!location.hash || location.hash.startsWith("#kpi-")) return;
+    let cancelled = false;
+    let attempts = 0;
+    const scroll = () => {
+      if (cancelled) return;
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (++attempts < 40) window.setTimeout(scroll, 200);
+    };
+    const handle = window.setTimeout(scroll, 150);
+    return () => { cancelled = true; window.clearTimeout(handle); };
+  }, [location.pathname, location.hash]);
+
+  useEffect(() => {
+    const refresh = () => setFavorites(userId == null ? [] : readFavorites(userId));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    window.addEventListener("storage", refresh);
+    return () => { window.removeEventListener("techlead-favorites-changed", refresh); window.removeEventListener("storage", refresh); };
+  }, [userId]);
+
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return window.localStorage.getItem("techlead-hub.sidebar-collapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((previous) => !previous);
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("techlead-hub.sidebar-collapsed", String(sidebarCollapsed)); }
+    catch { /* armazenamento opcional */ }
+  }, [sidebarCollapsed]);
+
+  // Atalho opcional de navegação: Alt+M alterna o menu sem interferir nos campos.
+  useEffect(() => {
+    const onSidebarShortcut = (event: KeyboardEvent) => {
+      const target = event.target;
+      const editing = target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (editing || event.repeat || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.key.toLowerCase() !== "m") return;
+      event.preventDefault();
+      toggleSidebar();
+    };
+    window.addEventListener("keydown", onSidebarShortcut);
+    return () => window.removeEventListener("keydown", onSidebarShortcut);
+  }, [toggleSidebar]);
 
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
   const [chatPopup, setChatPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const chatSnapshotRef = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  const chatPollInFlightRef = useRef(false);
   type FloatingChat = { channelId: number; channelName: string; minimized: boolean; unread: number; peerId?: number; peerName?: string; presence?: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; typingNames: string[]; messages: Array<{ id: number; content: string; createdAt: string; author: { id: number; name: string } }> };
   const [floatingChats, setFloatingChats] = useState<FloatingChat[]>([]);
   const [floatingDrafts, setFloatingDrafts] = useState<Record<number, string>>({});
@@ -175,10 +234,6 @@ export function Sidebar() {
       setFloatingChats([]);
     } catch { localStorage.removeItem(`techlead-floating-chats-${userId}`); }
   }, [userId]);
-
-  useEffect(() => {
-    // Não persiste mini-chats: abrir/fechar é uma decisão da sessão de navegação atual.
-  }, [floatingChats, userId]);
 
   const [
     appVersion,
@@ -228,11 +283,23 @@ export function Sidebar() {
     type GlobalChatMessage = { id: number; content: string; author: { id: number; name: string } };
     type GlobalChatChannel = { id: number; name: string; type?: string; unread?: number; updatedAt?: string; members?: Array<{ user: SharePerson }>; messages?: GlobalChatMessage[] };
     const loadChatUnread = async () => {
+      if (chatPollInFlightRef.current || document.visibilityState === "hidden") return;
+      chatPollInFlightRef.current = true;
       try {
         const response = await api.get<{ channels: GlobalChatChannel[] }>("/chat/channels");
         const channels = Array.isArray(response.data.channels) ? response.data.channels : [];
-        setShareChannels(channels as ShareChannel[]);
-        setChatUnread(channels.reduce((total, channel) => total + (channel.unread ?? 0), 0));
+        setShareChannels((previous) => {
+          const next = channels as ShareChannel[];
+          if (previous.length === next.length && previous.every((item, index) =>
+            item.id === next[index]?.id &&
+            item.updatedAt === next[index]?.updatedAt &&
+            item.name === next[index]?.name &&
+            item.type === next[index]?.type
+          )) return previous;
+          return next;
+        });
+        const unreadTotal = channels.reduce((total, channel) => total + (channel.unread ?? 0), 0);
+        setChatUnread((previous) => previous === unreadTotal ? previous : unreadTotal);
 
         const previous = chatSnapshotRef.current;
         if (previous.size && location.pathname !== "/chat") {
@@ -260,12 +327,18 @@ export function Sidebar() {
           lastMessageId: channel.messages?.[channel.messages.length - 1]?.id ?? null,
         }]));
       } catch { /* chat global não deve afetar a navegação */ }
+      finally { chatPollInFlightRef.current = false; }
     };
     void loadChatUnread();
     const timer = window.setInterval(() => void loadChatUnread(), 8_000);
     const refresh = () => void loadChatUnread();
     window.addEventListener("techlead-hub:chat-read", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("techlead-hub:chat-read", refresh); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("techlead-hub:chat-read", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [userId, location.pathname]);
 
   const openFloatingChat = useCallback(async (channelId: number, channelName: string) => {
@@ -496,7 +569,7 @@ export function Sidebar() {
     user?.role === "ADMIN" ||
     (Array.isArray(user?.permissions)
       ? user.permissions.includes(permission)
-      : user?.role === "COORDENADOR" ||
+      : (user?.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) ||
         ["dashboard","tickets","my-operation","known-problems","attention","data-quality","clients","simer-map","performance","reports","corrections","evolutions","support","versions","knowledge"].includes(permission)),
     [user?.permissions, user?.role],
   );
@@ -522,7 +595,8 @@ export function Sidebar() {
 
   const analysisMenu = useMemo<MenuItemData[]>(
     () => [
-      ...(canAccess("dashboard") ? [{ label: "Dashboard Executivo", path: "/visao-operacional", icon: <HomeOutlined fontSize="small" /> }] : []),
+      ...(canAccess("dashboard") ? [{ label: "Dashboard Executivo", path: "/visao-operacional", icon: <HomeOutlined fontSize="small" /> },
+        { label: "Resultados da Equipe", path: "/visao-operacional/resultados-equipe", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("performance") ? [{ label: "Desempenho & SLA", path: "/visao-operacional/desempenho", icon: <SpeedOutlined fontSize="small" /> }] : []),
       ...(canAccess("reports") ? [{ label: "Relatórios", path: "/relatorios", icon: <AssessmentOutlined fontSize="small" /> }] : []),
       ...(canAccess("services")
@@ -623,17 +697,22 @@ export function Sidebar() {
     <>
       <Drawer
       variant="permanent"
+      className={sidebarCollapsed ? "techlead-sidebar techlead-sidebar--collapsed" : "techlead-sidebar"}
       sx={{
-        width:
-          drawerWidth,
+        width: sidebarCollapsed ? 76 : drawerWidth,
 
         flexShrink:
           0,
+        // Alterar a largura só uma vez evita redimensionar gráficos e cards
+        // em cada quadro da animação.
+        transition: "none",
 
         "& .MuiDrawer-paper":
           {
-            width:
-              drawerWidth,
+            // O contêiner muda o espaço do conteúdo uma vez por clique; só o
+            // painel visual anima, sem redimensionar os gráficos a cada quadro.
+            width: sidebarCollapsed ? 76 : drawerWidth,
+            transition: "width 240ms cubic-bezier(0.22, 1, 0.36, 1)",
 
             boxSizing:
               "border-box",
@@ -645,21 +724,44 @@ export function Sidebar() {
               "column",
 
             background:
-              "linear-gradient(180deg, #0A0A0A 0%, #101312 52%, #0A0A0A 100%)",
+              "linear-gradient(180deg, #0b1827 0%, #10263a 52%, #091421 100%)",
 
             color:
               "#FFFFFF",
 
             borderRight:
-              "1px solid rgba(255,255,255,0.07)",
+              "1px solid rgba(141,198,224,0.16)",
             boxShadow:
-              "8px 0 24px rgba(0,0,0,0.08)",
+              "8px 0 32px rgba(0,0,0,0.16)",
 
             overflow:
               "hidden",
           },
       }}
     >
+      <Box sx={{
+        position: sidebarCollapsed ? "relative" : "absolute",
+        top: sidebarCollapsed ? undefined : 10,
+        right: sidebarCollapsed ? undefined : 10,
+        zIndex: 2,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: sidebarCollapsed ? 54 : 36,
+        px: sidebarCollapsed ? 1 : 0,
+      }}>
+        <IconButton
+          size="small"
+          onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+          title={sidebarCollapsed ? "Expandir menu lateral (Alt+M)" : "Recolher menu lateral (Alt+M)"}
+          aria-expanded={!sidebarCollapsed}
+          sx={{ color: "rgba(255,255,255,.8)", border: "1px solid rgba(255,255,255,.14)", borderRadius: 2, "&:hover": { bgcolor: "rgba(255,255,255,.10)" } }}
+        >
+          {sidebarCollapsed ? <ChevronRightRounded fontSize="small" /> : <ChevronLeftRounded fontSize="small" />}
+        </IconButton>
+      </Box>
+
       {/* ===================================================
           CONTEÚDO ROLÁVEL
       =================================================== */}
@@ -674,6 +776,9 @@ export function Sidebar() {
 
           overflowY:
             "auto",
+
+          contain: "layout paint",
+          overscrollBehavior: "contain",
 
           overflowX:
             "hidden",
@@ -717,6 +822,7 @@ export function Sidebar() {
         ================================================= */}
 
         <Box
+          className="techlead-sidebar-identity"
           sx={{
             px:
               1.75,
@@ -732,32 +838,12 @@ export function Sidebar() {
             direction="row"
             spacing={1}
             sx={{
-              alignItems:
-                "center",
+              alignItems: "center",
+              pr: 4.5,
+              minHeight: 28,
             }}
           >
-            <Box
-              aria-hidden
-              sx={{
-                width:
-                  10,
-
-                height:
-                  10,
-
-                borderRadius:
-                  "2px",
-
-                backgroundColor:
-                  aliareColors.green,
-
-                transform:
-                  "rotate(-6deg)",
-
-                flexShrink:
-                  0,
-              }}
-            />
+            <Box component="img" src="/hub-suporte-simer.svg" alt="" aria-hidden="true" sx={{ width: 27, height: 27, borderRadius: 1, flexShrink: 0 }} />
 
             <Typography
               sx={{
@@ -777,7 +863,7 @@ export function Sidebar() {
                   "rgba(255,255,255,0.72)",
               }}
             >
-              aliare
+              HUB SUPORTE SIMER
             </Typography>
           </Stack>
 
@@ -889,7 +975,7 @@ export function Sidebar() {
           </Box>
         </Box>
 
-        {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5 }}>
+        {canAccess("dashboard") && <Box sx={{ px: 1, mb: .5, mt: sidebarCollapsed ? 0 : .25 }}>
           <ListItemButton component={NavLink} to="/inicio" end title="Central de Trabalho" sx={{ minHeight: 40, px: 1.15, borderRadius: 1.5, color: "rgba(255,255,255,.72)", "&:hover": { bgcolor: "rgba(24,199,122,.08)", color: "#fff" }, "&.active": { bgcolor: "rgba(24,199,122,.13)", color: "#fff" }, "&.active .MuiListItemIcon-root": { color: aliareColors.green } }}>
             <ListItemIcon sx={{ minWidth: 34, color: "rgba(255,255,255,.44)", "& .MuiSvgIcon-root": { fontSize: 19 } }}><HomeOutlined fontSize="small" /></ListItemIcon>
             <ListItemText primary="Início" slotProps={{ primary: { sx: { fontSize: ".8rem", fontWeight: 600, lineHeight: 1.35 } } }} />
@@ -897,10 +983,20 @@ export function Sidebar() {
           </ListItemButton>
         </Box>}
 
+        {favorites.length > 0 && <MenuSection
+          title="Favoritos"
+          ariaLabel="Navegação de favoritos"
+          items={favorites.filter((favorite) => [...movementMenu, ...managementMenu, ...analysisMenu, ...developmentMenu, ...registrationMenu, ...knowledgeMenu].some((item) => favorite.kind === "card" ? (favorite.path.split("#")[0] === item.path || favorite.path.split("#")[0].startsWith(item.path + "/")) : item.path === favorite.path)).map((favorite) => ({ label: favorite.label, path: favorite.kind === "card" && favorite.id.startsWith("card:") && !favorite.id.includes(":/") ? "/visao-operacional#kpi-" + encodeURIComponent(favorite.label) : favorite.path, icon: <StarOutlineRounded fontSize="small" /> }))}
+          compact={sidebarCollapsed}
+          open={true}
+          onToggle={() => setFavorites((current) => [...current])}
+        />}
+
         <MenuSection
           title="Operação"
           ariaLabel="Navegação de operação"
           items={movementMenu}
+          compact={sidebarCollapsed}
           open={openSections.movimentos}
           onToggle={() => setOpenSections((current) => ({ ...current, movimentos: !current.movimentos }))}
         />
@@ -909,6 +1005,7 @@ export function Sidebar() {
           title="Gestão"
           ariaLabel="Navegação de gestão"
           items={managementMenu}
+          compact={sidebarCollapsed}
           open={openSections.gestao}
           onToggle={() => setOpenSections((current) => ({ ...current, gestao: !current.gestao }))}
         />
@@ -917,6 +1014,7 @@ export function Sidebar() {
           title="Análises"
           ariaLabel="Navegação de análises"
           items={analysisMenu}
+          compact={sidebarCollapsed}
           open={openSections.analises}
           onToggle={() => setOpenSections((current) => ({ ...current, analises: !current.analises }))}
         />
@@ -925,6 +1023,7 @@ export function Sidebar() {
           title="Desenvolvimento"
           ariaLabel="Navegação de desenvolvimento"
           items={developmentMenu}
+          compact={sidebarCollapsed}
           open={openSections.development}
           onToggle={() => setOpenSections((current) => ({ ...current, development: !current.development }))}
         />
@@ -933,6 +1032,7 @@ export function Sidebar() {
           title="Cadastros"
           ariaLabel="Navegação de cadastros"
           items={registrationMenu}
+          compact={sidebarCollapsed}
           open={openSections.cadastros}
           onToggle={() => setOpenSections((current) => ({ ...current, cadastros: !current.cadastros }))}
         />
@@ -941,6 +1041,7 @@ export function Sidebar() {
           title="Conhecimento"
           ariaLabel="Navegação de conhecimento"
           items={knowledgeMenu}
+          compact={sidebarCollapsed}
           open={openSections.conhecimento}
           onToggle={() => setOpenSections((current) => ({ ...current, conhecimento: !current.conhecimento }))}
         />
@@ -958,6 +1059,7 @@ export function Sidebar() {
       =================================================== */}
 
       <Box
+        className="techlead-sidebar-meta"
         sx={{
           flexShrink:
             0,
@@ -1295,13 +1397,13 @@ export function Sidebar() {
               Meu Perfil
             </MuiMenuItem>
 
-            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/usuarios"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
-              <Badge color="error" badgeContent={pendingUsers}><ManageAccountsOutlined sx={{ fontSize: 18 }} /></Badge> Usuários
+            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes#equipe"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+              <Badge color="error" badgeContent={pendingUsers}><ManageAccountsOutlined sx={{ fontSize: 18 }} /></Badge> Equipe e permissões
             </MuiMenuItem>}
 
-            {isAdmin && <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
+            <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/configuracoes"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
               <SettingsOutlined sx={{ fontSize: 18 }} /> Configurações
-            </MuiMenuItem>}
+            </MuiMenuItem>
 
             <MuiMenuItem onClick={() => { handleCloseProfileMenu(); navigate("/sobre"); }} sx={{ mx: .75, minHeight: 38, borderRadius: 1.2, fontSize: ".78rem", fontWeight: 600, gap: 1.1 }}>
               <InfoOutlined sx={{ fontSize: 18 }} /> Sobre e atualizações
@@ -1345,13 +1447,18 @@ function MenuSection({
   items,
   open,
   onToggle,
+  compact = false,
 }: {
   title: string;
   ariaLabel: string;
   items: MenuItemData[];
   open: boolean;
   onToggle: () => void;
+  compact?: boolean;
 }) {
+  const location = useLocation();
+  const activeSection = items.some((item) => location.pathname === item.path || location.pathname.startsWith(item.path + "/"));
+
   if (
     items.length === 0
   ) {
@@ -1371,12 +1478,12 @@ function MenuSection({
           0.2,
       }}
     >
-      <ListItemButton aria-expanded={open} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: open ? "rgba(255,255,255,.045)" : "transparent", "&:hover": { bgcolor: "rgba(255,255,255,.04)", color: "rgba(255,255,255,.82)" } }}>
+      {!compact && <ListItemButton aria-expanded={open} aria-current={activeSection ? "location" : undefined} onClick={onToggle} sx={{ minHeight: 36, px: 1.25, borderRadius: 1.5, color: activeSection ? "#fff" : open ? "rgba(255,255,255,.90)" : "rgba(255,255,255,.52)", bgcolor: activeSection ? "rgba(24,199,122,.09)" : open ? "rgba(255,255,255,.045)" : "transparent", borderLeft: activeSection ? `2px solid ${aliareColors.green}` : "2px solid transparent", "&:hover": { bgcolor: "rgba(255,255,255,.06)", color: "#fff" } }}>
         <ListItemText primary={title} slotProps={{ primary: { sx: { fontSize: ".68rem", fontWeight: 650, letterSpacing: ".075em", textTransform: "uppercase" } } }} />
         {open ? <ExpandLessRounded sx={{ fontSize: 18, opacity: .7 }} /> : <ExpandMoreRounded sx={{ fontSize: 18, opacity: .7 }} />}
-      </ListItemButton>
+      </ListItemButton>}
 
-      <Collapse in={open} timeout="auto" unmountOnExit>
+      <Collapse in={compact || open} timeout={compact ? 0 : 160} unmountOnExit>
       <List
         disablePadding
         sx={{
@@ -1466,6 +1573,15 @@ function MenuItem({
   icon: ReactNode;
   badge?: number;
 }) {
+  const { user } = useAuth();
+  const [starred, setStarred] = useState(false);
+  useEffect(() => {
+    const refresh = () => setStarred(user?.id != null && readFavorites(user.id).some((favorite) => favorite.id === "routine:" + path));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    return () => window.removeEventListener("techlead-favorites-changed", refresh);
+  }, [user?.id, path]);
+
   const hasBadge =
     typeof badge ===
       "number" &&
@@ -1580,12 +1696,13 @@ function MenuItem({
             34,
 
           color:
-            "rgba(255,255,255,0.44)",
+            "rgba(220,232,244,0.52)",
 
           transition:
-            "color 0.15s ease",
+            "color 0.15s ease, opacity 0.15s ease",
           "& .MuiSvgIcon-root": {
-            fontSize: 19,
+            fontSize: 18,
+            opacity: .9,
           },
         }}
       >
@@ -1656,6 +1773,7 @@ function MenuItem({
         }}
       />
 
+      {user?.id != null && <IconButton size="small" aria-label={starred ? `Desfavoritar ${label}` : `Favoritar ${label}`} title={starred ? "Remover dos favoritos" : "Favoritar rotina"} onClick={(event) => { event.preventDefault(); event.stopPropagation(); toggleFavorite(user.id, { id: "routine:" + path, label, path, kind: "routine" }); }} sx={{ p: .4, color: starred ? "#F5C451" : "rgba(255,255,255,.40)" }}>{starred ? <StarRounded sx={{ fontSize: 16 }} /> : <StarOutlineRounded sx={{ fontSize: 16 }} />}</IconButton>}
       {!window.techLeadHub?.desktop && <RoutineNewTabButton path={path} label={label} />}
 
       {hasBadge && (

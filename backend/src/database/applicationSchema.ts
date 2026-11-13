@@ -12,7 +12,8 @@ export async function ensureApplicationSchema() {
       ADD COLUMN IF NOT EXISTS "permissions" JSONB,
       ADD COLUMN IF NOT EXISTS "avatarData" BYTEA,
       ADD COLUMN IF NOT EXISTS "avatarMimeType" TEXT,
-      ADD COLUMN IF NOT EXISTS "avatarUpdatedAt" TIMESTAMP(3)
+      ADD COLUMN IF NOT EXISTS "avatarUpdatedAt" TIMESTAMP(3),
+      ADD COLUMN IF NOT EXISTS "weatherCity" VARCHAR(120)
   `);
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "UserSession"
@@ -304,6 +305,61 @@ export async function ensureApplicationSchema() {
     )
   `);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DataQualitySnapshot_snapshotDate_idx" ON "DataQualitySnapshot" ("snapshotDate")`);
+  // O Desktop distribuído não executa Prisma Migrate. Mantemos as tabelas
+  // das filas Teams sincronizadas com os modelos para upgrades sem CLI.
+  await prisma.$executeRawUnsafe(`
+    DO $$ BEGIN
+      CREATE TYPE "TeamsAlertStatus" AS ENUM ('PENDING', 'PROCESSING', 'SENT', 'DEAD');
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$;
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TeamsAlertOutbox" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "movideskId" INTEGER NOT NULL,
+      "eventType" VARCHAR(40) NOT NULL DEFAULT 'NEW_TICKET',
+      "subject" TEXT NOT NULL,
+      "client" TEXT,
+      "createdDate" TIMESTAMP(3) NOT NULL,
+      "urgency" TEXT,
+      "status" "TeamsAlertStatus" NOT NULL DEFAULT 'PENDING',
+      "attempts" INTEGER NOT NULL DEFAULT 0,
+      "nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "lockedUntil" TIMESTAMP(3),
+      "sentAt" TIMESTAMP(3),
+      "lastHttpStatus" INTEGER,
+      "lastError" VARCHAR(500),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TeamsAlertOutbox_movideskId_eventType_key" ON "TeamsAlertOutbox" ("movideskId", "eventType")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsAlertOutbox_status_nextAttemptAt_idx" ON "TeamsAlertOutbox" ("status", "nextAttemptAt")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsAlertOutbox_lockedUntil_idx" ON "TeamsAlertOutbox" ("lockedUntil")`);
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "TeamsWorkflowOutbox" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "eventKey" VARCHAR(180) NOT NULL UNIQUE,
+      "eventType" VARCHAR(40) NOT NULL,
+      "movideskId" INTEGER NOT NULL,
+      "azureWorkItemId" INTEGER,
+      "payload" JSONB NOT NULL,
+      "status" "TeamsAlertStatus" NOT NULL DEFAULT 'PENDING',
+      "attempts" INTEGER NOT NULL DEFAULT 0,
+      "nextAttemptAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "lockedUntil" TIMESTAMP(3),
+      "sentAt" TIMESTAMP(3),
+      "lastHttpStatus" INTEGER,
+      "lastError" VARCHAR(500),
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL
+    )
+  `);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsWorkflowOutbox_status_nextAttemptAt_idx" ON "TeamsWorkflowOutbox" ("status", "nextAttemptAt")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsWorkflowOutbox_lockedUntil_idx" ON "TeamsWorkflowOutbox" ("lockedUntil")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsWorkflowOutbox_eventType_createdAt_idx" ON "TeamsWorkflowOutbox" ("eventType", "createdAt")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsWorkflowOutbox_movideskId_idx" ON "TeamsWorkflowOutbox" ("movideskId")`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TeamsWorkflowOutbox_azureWorkItemId_idx" ON "TeamsWorkflowOutbox" ("azureWorkItemId")`);
   // Desktop distribuído não executa Prisma CLI: instalar tabela de seguimento
   // de Tasks também durante a inicialização, sem alterar acompanhamentos existentes.
   await prisma.$executeRawUnsafe(`

@@ -5,8 +5,8 @@ import {
   CardContent,
   Stack,
   Typography,
-  useTheme,
 } from "@mui/material";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 
 type ChartPanelProps = {
   title: string;
@@ -25,38 +25,28 @@ export function ChartPanel({
   minHeight = 280,
   footer,
 }: ChartPanelProps) {
-  const theme = useTheme();
-  const dark = theme.palette.mode === "dark";
-
   return (
     <Card
       variant="outlined"
       sx={{
-        height: "100%",
-        minWidth: 0,
-        overflow: "hidden",
-        bgcolor: "background.paper",
-        borderColor: "divider",
-        background: dark
-          ? "linear-gradient(145deg, rgba(10,33,48,.96), rgba(7,25,38,.985))"
-          : "linear-gradient(180deg, #FFFFFF, #FBFCFD)",
+        ...analyticalPanelSx,
       }}
     >
       <CardContent
         sx={{
           height: "100%",
-          p: { xs: 1.4, md: 1.65 },
+          p: { xs: 2, md: 2.5 },
           display: "flex",
           flexDirection: "column",
-          "&:last-child": { pb: { xs: 1.4, md: 1.65 } },
+          "&:last-child": { pb: { xs: 2, md: 2.5 } },
         }}
       >
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={0.9}
           sx={{
-            mb: 1.1,
-            minHeight: 38,
+            mb: 1.5,
+            minHeight: { xs: 0, sm: 40 },
             justifyContent: "space-between",
             alignItems: { xs: "stretch", sm: "flex-start" },
           }}
@@ -65,8 +55,8 @@ export function ChartPanel({
             <Stack direction="row" spacing={0.8} sx={{ alignItems: "center" }}>
               <Box
                 sx={{
-                  width: 3,
-                  height: 18,
+                  width: 4,
+                  height: 24,
                   borderRadius: "2px",
                   bgcolor: "primary.main",
                   flexShrink: 0,
@@ -76,6 +66,7 @@ export function ChartPanel({
                 variant="subtitle2"
                 sx={{
                   fontWeight: 820,
+                  fontSize: { xs: "1rem", sm: "1.06rem" },
                   lineHeight: 1.3,
                   letterSpacing: "-.008em",
                 }}
@@ -118,10 +109,10 @@ export function ChartPanel({
           sx={{
             position: "relative",
             flex: "1 1 auto",
-            minHeight,
+            minHeight: { xs: Math.min(minHeight, 220), sm: minHeight },
             minWidth: 0,
             width: "100%",
-            borderRadius: "10px",
+            borderRadius: "var(--hub-radius-md)",
             "& > .recharts-responsive-container": {
               minHeight,
             },

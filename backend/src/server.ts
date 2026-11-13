@@ -9,6 +9,7 @@ import { MovideskSyncScheduler } from "./jobs/MovideskSyncScheduler";
 import { MovideskReferenceSyncScheduler } from "./jobs/MovideskReferenceSyncScheduler";
 import { MovideskEnrichmentScheduler } from "./jobs/MovideskEnrichmentScheduler";
 import { MovideskTeamsAlertScheduler } from "./jobs/MovideskTeamsAlertScheduler";
+import { TeamsWorkflowScheduler } from "./jobs/TeamsWorkflowScheduler";
 
 import {
   ensureApplicationSchema,
@@ -59,6 +60,7 @@ let movideskSyncScheduler: MovideskSyncScheduler | undefined;
 let movideskReferenceSyncScheduler: MovideskReferenceSyncScheduler | undefined;
 let movideskEnrichmentScheduler: MovideskEnrichmentScheduler | undefined;
 let movideskTeamsAlertScheduler: MovideskTeamsAlertScheduler | undefined;
+let teamsWorkflowScheduler: TeamsWorkflowScheduler | undefined;
 
 let server: Server | undefined;
 let databaseRecoveryTimer: NodeJS.Timeout | undefined;
@@ -72,11 +74,13 @@ function startSchedulers() {
   movideskReferenceSyncScheduler = new MovideskReferenceSyncScheduler();
   movideskEnrichmentScheduler = new MovideskEnrichmentScheduler();
   movideskTeamsAlertScheduler = new MovideskTeamsAlertScheduler();
+  teamsWorkflowScheduler = new TeamsWorkflowScheduler();
   azureSyncScheduler.start();
   movideskSyncScheduler.start();
   movideskReferenceSyncScheduler.start();
   movideskEnrichmentScheduler.start();
   movideskTeamsAlertScheduler.start();
+  teamsWorkflowScheduler.start();
   schedulersStarted = true;
 }
 
@@ -95,6 +99,7 @@ function scheduleDatabaseRecovery() {
         // O PostgreSQL está pronto: falha de descriptografia exige intervenção
         // administrativa, mas não deve simular uma indisponibilidade do banco.
         console.warn("[server] Banco recuperado; credenciais de integração incompatíveis. Confira SYSTEM_CONFIG_KEY/JWT_SECRET.", configurationError instanceof Error ? configurationError.name : "erro desconhecido");
+        process.env.APP_INTEGRATIONS_CONFIG_STATUS = "unreadable";
       }
       console.log("[server] PostgreSQL recuperado; schedulers serão retomados quando configurados.");
       startSchedulers();
@@ -111,14 +116,16 @@ function scheduleDatabaseRecovery() {
 }
 
 function assertPrismaClientUpToDate() {
-  // Estas entidades foram adicionadas junto ao calendário e seus lembretes.
+  // Estas entidades foram adicionadas junto ao calendário, alertas e outbox Teams.
   // O tsx executa TypeScript sem regenerar o Prisma Client após um git pull.
   // Uma geração antiga deixaria prisma.calendarMeeting como undefined e
   // causaria erros findMany repetidos em calendário e notificações.
+  const workflowOutbox = (prisma as unknown as Record<string, unknown>).teamsWorkflowOutbox as { findMany?: unknown } | undefined;
   if (
     typeof prisma.calendarMeeting?.findMany !== "function" ||
     typeof prisma.calendarMeetingParticipant?.findMany !== "function" ||
-    typeof prisma.teamsAlertOutbox?.findMany !== "function"
+    typeof prisma.teamsAlertOutbox?.findMany !== "function" ||
+    typeof workflowOutbox?.findMany !== "function"
   ) {
     throw new Error(
       "[prisma] Prisma Client desatualizado para reuniões ou alertas Teams. " +
@@ -142,9 +149,11 @@ async function start() {
       // Credenciais criptografadas incompatíveis não significam falha de PostgreSQL.
       // Nunca registre os valores nem a chave usados na descriptografia.
       console.error("[server] Não foi possível carregar configurações seguras; banco permanece disponível. Verifique a chave de criptografia da instalação.", configurationError instanceof Error ? configurationError.name : "erro desconhecido");
+      process.env.APP_INTEGRATIONS_CONFIG_STATUS = "unreadable";
     }
   } catch (error) {
     process.env.APP_DATABASE_READY = "false";
+    process.env.APP_INTEGRATIONS_CONFIG_STATUS = "unknown";
     console.error("[server] Banco indisponível na inicialização; API subirá em modo degradado:", error);
   }
 
@@ -214,6 +223,7 @@ async function shutdown(
   movideskReferenceSyncScheduler?.stop();
   movideskEnrichmentScheduler?.stop();
   movideskTeamsAlertScheduler?.stop();
+  teamsWorkflowScheduler?.stop();
 
   try {
     if (server) {

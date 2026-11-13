@@ -46,7 +46,7 @@ const Clients = lazy(() => import("./pages/Clients").then((module) => ({ default
 const About = lazy(() => import("./pages/About").then((module) => ({ default: module.About })));
 const Profile = lazy(() => import("./pages/Profile").then((module) => ({ default: module.Profile })));
 const Login = lazy(() => import("./pages/Login").then((module) => ({ default: module.Login })));
-const Users = lazy(() => import("./pages/Users").then((module) => ({ default: module.Users })));
+
 const AzureWorkItems = lazy(() => import("./pages/AzureWorkItems").then((module) => ({ default: module.AzureWorkItems })));
 const Versions = lazy(() => import("./pages/Versions").then((module) => ({ default: module.Versions })));
 const Settings = lazy(() => import("./pages/Settings").then((module) => ({ default: module.Settings })));
@@ -59,22 +59,11 @@ const KnownProblems = lazy(() => import("./pages/KnownProblems").then((module) =
 const ManagementIntelligence = lazy(() => import("./pages/ManagementIntelligence").then((module) => ({ default: module.ManagementIntelligence })));
 const AnalysisAssistant = lazy(() => import("./pages/AnalysisAssistant").then((module) => ({ default: module.AnalysisAssistant })));
 const OperationalOverview = lazy(() => import("./pages/OperationalOverview").then((module) => ({ default: module.OperationalOverview })));
+const TeamResults = lazy(() => import("./pages/TeamResults"));
 const OperationsHub = lazy(() => import("./pages/OperationsHub").then((module) => ({ default: module.OperationsHub })));
 const RiskPendingHub = lazy(() => import("./pages/RiskPendingHub").then((module) => ({ default: module.RiskPendingHub })));
 
-const warmRouteChunks = () => {
-  void import("./pages/OperationalOverview");
-  void import("./pages/OperationsHub");
-  void import("./pages/AzureWorkItems");
-  void import("./pages/Versions");
-  void import("./pages/ManagementIntelligence");
-  window.setTimeout(() => {
-    void import("./pages/Analysts");
-    void import("./pages/Clients");
-    void import("./pages/Chat");
-    void import("./pages/Investigation");
-  }, 1200);
-};
+const warmTaskRoute = () => void import("./pages/AzureWorkItems");
 
 import {
   aliareColors,
@@ -95,7 +84,17 @@ function AuthenticatedLayout({
   children: ReactNode;
 }) {
   useEffect(() => {
-    const id = window.setTimeout(warmRouteChunks, 250);
+    // Prepare the task screen during idle time without competing with the
+    // initial page render and its first API requests.
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (idleWindow.requestIdleCallback) {
+      const id = idleWindow.requestIdleCallback(warmTaskRoute, { timeout: 2_500 });
+      return () => idleWindow.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(warmTaskRoute, 1_000);
     return () => window.clearTimeout(id);
   }, []);
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
@@ -130,13 +129,13 @@ function AuthenticatedLayout({
       "/importar": "Configurações · Dados & Sincronizações",
       "/relatorios": "Relatórios",
       "/minha-operacao": "Minha Operação",
-      "/qualidade-dados": "Pendências",
+      "/qualidade-dados": "Qualidade dos dados",
       "/usuarios": "Usuários",
       "/configuracoes": "Configurações",
       "/sobre": "Sobre",
       "/perfil": "Perfil",
     };
-    document.title = routineTitles[location.pathname] ?? "Hub Suporte Simer";
+    document.title = `${routineTitles[location.pathname] ?? "Início"} | HUB SUPORTE SIMER`;
   }, [location.pathname]);
   useEffect(() => {
     const unavailable = () => setBackendUnavailable(true);
@@ -163,6 +162,8 @@ function AuthenticatedLayout({
           sx={{
             display: "flex",
             width: "100%",
+            minWidth: 0,
+            maxWidth: "100vw",
             minHeight: "100vh",
             height: fixedWorkspace ? "100dvh" : "auto",
             overflow: fixedWorkspace ? "hidden" : "visible",
@@ -177,6 +178,7 @@ function AuthenticatedLayout({
             sx={{
               flexGrow: 1,
               minWidth: 0,
+              maxWidth: "100%",
               minHeight: fixedWorkspace ? 0 : "100vh",
               height: fixedWorkspace ? "100dvh" : "auto",
               boxSizing: "border-box",
@@ -377,7 +379,7 @@ function RoutineAccess({ permission, children }: { permission: string; children:
   if (user.role === "ADMIN") return children;
   const allowed = Array.isArray(user.permissions)
     ? user.permissions.includes(permission)
-    : user.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
+    : (user.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) || DEFAULT_ANALYST_PERMISSIONS.includes(permission);
   if (allowed) return children;
   return (
     <Box sx={{ minHeight: "100vh", display: "grid", placeItems: "center", p: 3, bgcolor: "background.default" }}>
@@ -485,6 +487,7 @@ function App() {
           <Route path="/inicio" element={<Navigate to="/visao-operacional" replace />} />
           <Route path="/analise-atendimento" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><AnalysisAssistant /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/visao-operacional" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
+          <Route path="/visao-operacional/resultados-equipe" element={<RoutineAccess permission="dashboard"><AuthenticatedLayout><TeamResults /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/visao-operacional/desempenho" element={<RoutineAccess permission="performance"><AuthenticatedLayout><OperationalOverview /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/operacao/tickets" element={<RoutineAccess permission="tickets"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
           <Route path="/operacao/minha-operacao" element={<RoutineAccess permission="my-operation"><AuthenticatedLayout><OperationsHub /></AuthenticatedLayout></RoutineAccess>} />
@@ -596,7 +599,7 @@ function App() {
             element={
               <AdminOnly>
                 <AuthenticatedLayout>
-                  <Users />
+                  <Navigate to="/configuracoes#equipe" replace />
                 </AuthenticatedLayout>
               </AdminOnly>
             }
@@ -605,11 +608,9 @@ function App() {
           <Route
             path="/configuracoes"
             element={
-              <AdminOnly>
-                <AuthenticatedLayout>
-                  <Settings />
-                </AuthenticatedLayout>
-              </AdminOnly>
+              <AuthenticatedLayout>
+                <Settings />
+              </AuthenticatedLayout>
             }
           />
 

@@ -12,7 +12,7 @@ export function hasRoutinePermission(request: AuthenticatedRequest, permission: 
   if (auth.role === "ADMIN") return true;
   return Array.isArray(auth.permissions)
     ? auth.permissions.includes(permission)
-    : auth.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.has(permission);
+    : (auth.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) || DEFAULT_ANALYST_PERMISSIONS.has(permission);
 }
 
 export function requireAnyPermission(...permissions: string[]) {

@@ -23,6 +23,8 @@ import {
   VisibilityOffOutlined,
   VisibilityOutlined,
   AutoGraphOutlined,
+  OpenInNewOutlined,
+  NewspaperOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -55,6 +57,8 @@ import { useColorMode } from "../context/ColorModeContext";
 /* =========================================================
    TIPOS
 ========================================================= */
+
+type CooperativeHeadline = { title: string; link: string; source: string; publishedAt: string | null };
 
 type LocationState = {
   from?: string;
@@ -116,6 +120,7 @@ export function Login() {
 
   const { mode: colorMode } = useColorMode();
   const [workMessage, setLeadershipMessage] = useState(0);
+  const [cooperativeNews, setCooperativeNews] = useState<CooperativeHeadline[]>([]);
 
   const [
     mode,
@@ -403,6 +408,16 @@ export function Login() {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void api.get<{ items: CooperativeHeadline[] }>("/public-news/cooperatives", { timeout: 8000 })
+      .then(({ data }) => {
+        if (active && Array.isArray(data.items)) setCooperativeNews(data.items.slice(0, 3));
+      })
+      .catch(() => { /* notícias são opcionais; login permanece funcional */ });
+    return () => { active = false; };
+  }, []);
+
   /* =======================================================
      LIMPAR ERRO
   ======================================================= */
@@ -664,12 +679,10 @@ export function Login() {
   return (
     <Box
       sx={{
-        minHeight:
-          "100dvh",
-
-        display:
-          "flex",
-
+        minHeight: "100dvh",
+        height: { md: "100dvh" },
+        boxSizing: "border-box",
+        display: "flex",
         position: "relative",
         overflow: "hidden",
         background:
@@ -705,9 +718,9 @@ export function Login() {
             lg: "50%",
           },
 
-          minHeight:
-            "100dvh",
-
+          height: "100%",
+          minHeight: 0,
+          boxSizing: "border-box",
           flexDirection:
             "column",
 
@@ -721,9 +734,13 @@ export function Login() {
             "hidden",
 
           p: {
-            md: 5,
-            lg: 7,
+            md: 3,
+            lg: 4,
+            xl: 5,
           },
+          gap: 1.5,
+          "@media (max-height: 760px)": { gap: 1, py: 2.5 },
+          "@media (max-height: 660px)": { "& .login-rotating-message": { display: "none" } },
 
           background:
             "transparent",
@@ -804,21 +821,7 @@ export function Login() {
                 "center",
             }}
           >
-            <Box
-              sx={{
-                width: 11,
-                height: 11,
-
-                borderRadius:
-                  "2px",
-
-                backgroundColor:
-                  aliareColors.green,
-
-                transform:
-                  "rotate(-6deg)",
-              }}
-            />
+            <Box component="img" src="/hub-suporte-simer.svg" alt="" aria-hidden="true" sx={{ width: 34, height: 34, borderRadius: 1 }} />
 
             <Typography
               sx={{
@@ -838,7 +841,7 @@ export function Login() {
                   colorMode === "dark" ? "rgba(255,255,255,0.72)" : "rgba(16,33,27,.62)",
               }}
             >
-              aliare
+              HUB SUPORTE SIMER
             </Typography>
           </Stack>
 
@@ -861,7 +864,7 @@ export function Login() {
                 "-0.04em",
             }}
           >
-            TechLead Hub · SIMER
+            HUB SUPORTE SIMER
           </Typography>
 
           <Typography
@@ -880,6 +883,7 @@ export function Login() {
         </Box>
 
         <Box
+          className="login-rotating-message"
           sx={{
             position:
               "relative",
@@ -906,7 +910,7 @@ export function Login() {
             }}
           />
 
-          <Box key={workMessage} sx={{ minHeight: 190, p: 2.25, borderRadius: 3, border: "1px solid", borderColor: colorMode === "dark" ? "rgba(255,255,255,.08)" : "rgba(16,33,27,.09)", background: colorMode === "dark" ? "linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015))" : "linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
+          <Box key={workMessage} sx={{ minHeight: 0, p: 2, borderRadius: 3, border: "1px solid", borderColor: colorMode === "dark" ? "rgba(255,255,255,.08)" : "rgba(16,33,27,.09)", background: colorMode === "dark" ? "linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015))" : "linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42))", backdropFilter: "blur(10px)", boxShadow: "0 18px 50px rgba(0,0,0,.16)", animation: "workMessageIn .55s ease both", "@keyframes workMessageIn": { from: { opacity: 0, transform: "translateY(8px)" }, to: { opacity: 1, transform: "translateY(0)" } } }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1.2 }}>
               <AutoGraphOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
               <Typography variant="caption" sx={{ color: aliareColors.green, fontWeight: 700, letterSpacing: ".085em", textTransform: "uppercase" }}>
@@ -931,6 +935,46 @@ export function Login() {
 
 
         </Box>
+
+        {cooperativeNews.length > 0 && (
+          <Box component="section" aria-label="Notícias do agro e cooperativismo" sx={{
+            mt: 0.5, mb: 0.5, maxWidth: 540, minHeight: 0, overflow: "hidden",
+            "@media (max-height: 860px)": { "& .cooperative-news-item:nth-of-type(n+3)": { display: "none" } },
+            "@media (max-height: 730px)": { "& .cooperative-news-item:nth-of-type(n+2)": { display: "none" } },
+            "@media (max-height: 630px)": { display: "none" },
+          }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1 }}>
+              <NewspaperOutlined sx={{ color: aliareColors.green, fontSize: 19 }} />
+              <Typography variant="overline" sx={{ color: aliareColors.green, fontWeight: 800, letterSpacing: ".08em" }}>
+                Notícias do agro e cooperativismo
+              </Typography>
+            </Stack>
+            <Stack spacing={0.75}>
+              {cooperativeNews.map((item) => (
+                <Box key={item.link} className="cooperative-news-item" component="a" href={item.link} target="_blank" rel="noopener noreferrer"
+                  sx={{ display: "block", textDecoration: "none", color: "inherit", px: 1.25, py: 0.8,
+                    border: "1px solid", borderColor: "divider", borderRadius: 2,
+                    bgcolor: "rgba(127,145,160,.05)",
+                    transition: "border-color .18s ease, background-color .18s ease, transform .18s ease",
+                    "&:hover": { borderColor: aliareColors.green, bgcolor: "rgba(24,199,122,.07)", transform: "translateY(-1px)" },
+                    "&:focus-visible": { outline: "2px solid", outlineColor: aliareColors.green, outlineOffset: 2 },
+                    "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
+                  }}>
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{item.title}</Typography>
+                    <OpenInNewOutlined sx={{ fontSize: 15, flexShrink: 0, opacity: .65 }} />
+                  </Stack>
+                  <Typography variant="caption" sx={{ opacity: .72, display: "block", mt: 0.4 }}>
+                    {item.source}{item.publishedAt ? ` · ${new Date(item.publishedAt).toLocaleDateString("pt-BR")}` : ""}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+            <Typography variant="caption" sx={{ opacity: .55, display: "block", mt: .75 }}>
+              Manchetes públicas via Google Notícias · links externos
+            </Typography>
+          </Box>
+        )}
 
         <Box
           sx={{
@@ -1024,7 +1068,7 @@ export function Login() {
                   "-.025em",
               }}
             >
-              TechLead Hub · SIMER
+              HUB SUPORTE SIMER
             </Typography>
 
             <Typography
@@ -2248,7 +2292,7 @@ function RegisterSuccess({
         >
           Sua solicitação foi registrada com sucesso.
           Aguarde a aprovação de um administrador para
-          acessar o TechLead Hub · SIMER.
+          acessar o HUB SUPORTE SIMER.
         </Typography>
       </Box>
 
@@ -2436,7 +2480,7 @@ function getErrorMessage(
     }
 
     if (!error.response) {
-      return "Não foi possível conectar ao servidor do TechLead Hub · SIMER.";
+      return "Não foi possível conectar ao servidor do HUB SUPORTE SIMER.";
     }
   }
 

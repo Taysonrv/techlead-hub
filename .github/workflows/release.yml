@@ -78,9 +78,14 @@ jobs:
           Write-Host "Provisionamento sensível deve ser realizado no primeiro acesso e armazenado no safeStorage."
       - name: Compilar e testar
         shell: pwsh
+        env:
+          VITE_APP_VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           npm run prisma:generate --prefix backend
           npm run build --prefix backend
+          npm test --prefix backend
+          npm run lint --prefix frontend
+          npm test --prefix frontend
           npm run build --prefix frontend
           npm test --prefix desktop
           npm run build:desktop --prefix desktop
@@ -95,10 +100,19 @@ jobs:
             Where-Object { $_.Name -in @(".cache", ".vite", ".eslintcache", "coverage", "test", "tests", "__tests__") }
           $cacheDirs | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-      - name: Gerar instalador sem publicar
+      - name: Gerar instalador (assinatura opcional)
         shell: pwsh
         working-directory: desktop
-        run: npx electron-builder --win nsis --publish never
+        env:
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PFX }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WIN_CSC_LINK)) {
+            Write-Warning "Certificado de assinatura não configurado. O instalador será publicado sem assinatura Authenticode e poderá exibir o aviso do SmartScreen."
+          } else {
+            Write-Host "Certificado de assinatura configurado; o electron-builder tentará assinar o instalador."
+          }
+          npx electron-builder --win nsis --publish never
       - name: Validar artefatos
         shell: pwsh
         working-directory: desktop

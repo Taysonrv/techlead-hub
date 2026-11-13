@@ -1,4 +1,6 @@
+import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { KpiGrid } from "../components/KpiGrid";
+import { FavoriteAction } from "../components/FavoriteAction";
 import { SlaInvestigationPanel } from "../components/SlaInvestigationPanel";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
@@ -23,7 +25,7 @@ import {
 } from "@mui/material";
 
 import {
-  InfoOutlined,
+  InfoOutlined, InsightsOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -53,11 +55,14 @@ import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefre
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { analyticalPanelSx } from "../theme/layoutTokens";
 import { useTheme } from "@mui/material/styles";
 import { ExecutiveSection } from "../components/ExecutiveSection";
 import { ContentState } from "../components/ContentState";
+import { AsyncState } from "../components/AsyncState";
 
 import {
   aliareColors,
@@ -75,7 +80,7 @@ import {
   type ServiceLevelResult,
 } from "../utils/serviceLevel";
 import { calculateTimestampSla } from "../utils/timestampSla";
-import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
+import { auditOperationalMetrics, buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 
 const SUPPORT_ANALYSTS = [
   "ALAN KARDEK DA SILVA BARROS NETO",
@@ -176,6 +181,19 @@ type AnalystPerformance = {
 export function Performance() {
   const navigate = useNavigate();
   const theme = useTheme();
+  const isDark = theme.palette.mode === "dark";
+  const performancePanelSx = {
+    ...analyticalPanelSx,
+    mb: 1.75,
+    borderRadius: { xs: 2.5, md: 3 },
+    borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+    background: isDark
+      ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+      : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+    boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
+    "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
+    "&:hover": { borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)", boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)" },
+  } as const;
   const [hiddenTrendSeries, setHiddenTrendSeries] = useState<Set<string>>(() => new Set());
   const [analystsPage, setAnalystsPage] = useState(0);
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -184,6 +202,8 @@ export function Performance() {
   const loadRequestRef = useRef<AbortController | null>(null);
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
   const [executiveQuality, setExecutiveQuality] = useState<ExecutiveQuality | null>(null);
+  const [qualityRefreshVersion, setQualityRefreshVersion] = useState(0);
+  useVisiblePolling(() => setQualityRefreshVersion((value) => value + 1), 120_000);
 
   const {
     effectiveStartDate,
@@ -235,7 +255,7 @@ export function Performance() {
     })
       .catch(()=>{ if(!controller.signal.aborted) setExecutiveQuality(null); });
     return ()=>controller.abort();
-  }, []);
+  }, [qualityRefreshVersion]);
 
   const periodBounds = useMemo(() => ({
     start: startOfDay(effectiveStartDate),
@@ -243,7 +263,7 @@ export function Performance() {
   }), [effectiveStartDate, effectiveEndDate]);
 
   const operationalCohorts = useMemo(
-    () => buildOperationalCohorts(tickets, periodBounds),
+    () => buildOperationalCohorts(tickets, periodBounds, "allImported"),
     [tickets, periodBounds],
   );
   const periodTickets = operationalCohorts.entries;
@@ -603,16 +623,26 @@ export function Performance() {
     },
   ].filter((item) => item.value > 0);
 
-  if (loading) {
-    return <ContentState kind="loading" title="Carregando desempenho" minHeight={360} />;
-  }
-
-  if (error && tickets.length === 0) {
-    return <Alert severity="error">{error}</Alert>;
+  if (loading || (error && tickets.length === 0)) {
+    return (
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando desempenho" minHeight={360} />}
+      >
+        {() => null}
+      </AsyncState>
+    );
   }
 
   return (
-    <>
+    <Box className="performance-sla-page" sx={{
+      width: "100%", minWidth: 0,
+      background: isDark ? "radial-gradient(ellipse at 90% 0%, rgba(11,184,173,.055), transparent 44%)" : "radial-gradient(ellipse at 90% 0%, rgba(23,129,229,.03), transparent 44%)",
+      "& .recharts-cartesian-grid line": { stroke: theme.palette.divider },
+      "& .recharts-cartesian-axis-tick text": { fill: theme.palette.text.secondary },
+    }}>
       {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Qualidade operacional"
@@ -631,7 +661,7 @@ export function Performance() {
       <Alert
         severity="info"
         variant="outlined"
-        sx={{ mb: 1.5, borderRadius: 2 }}
+        sx={{ mb: 1.5, borderRadius: 2.5, borderColor: isDark ? "rgba(56,189,248,.20)" : "rgba(30,96,130,.14)", bgcolor: isDark ? "rgba(10,29,48,.64)" : "rgba(255,255,255,.72)" }}
       >
         <strong>SLA do suporte:</strong> usa os prazos e timestamps sincronizados do Movidesk. A 1ª resposta segue as entradas do período; a solução segue os tickets resolvidos no período. Atendimentos
         sem prazo ou marco de resposta/solução válido não entram no denominador, independentemente da categoria.
@@ -905,14 +935,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          mb: 1.75,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={performancePanelSx}
       >
         <CardContent>
           <CardSectionHeader
@@ -991,7 +1014,7 @@ export function Performance() {
                   />
 
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="firstResponse"
                     name="Primeira resposta"
                     stroke={aliareColors.green}
@@ -1003,7 +1026,7 @@ export function Performance() {
                   />
 
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="resolution"
                     name="Resolução"
                     stroke={semanticChartColors.normal}
@@ -1024,14 +1047,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          mb: 1.75,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={performancePanelSx}
       >
         <CardContent>
           <CardSectionHeader
@@ -1118,14 +1134,7 @@ export function Performance() {
 
       <Card
         elevation={0}
-        sx={{
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2.25,
-          overflow: "hidden",
-          backgroundColor: "background.paper",
-          boxShadow: "0 1px 2px rgba(16,24,40,0.035)",
-        }}
+        sx={{ ...performancePanelSx, overflow: "hidden" }}
       >
         <CardContent
           sx={{
@@ -1417,69 +1426,17 @@ export function Performance() {
 
               <Divider sx={{ my: 2 }} />
 
-              <Stack spacing={1}>
-                {drilldown.tickets.map((ticket) => (
-                  <Box
-                    key={ticket.id}
-                    sx={{
-                      p: 1.2,
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1.5,
-                      backgroundColor: "action.hover",
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      sx={{ justifyContent: "space-between", gap: 1 }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontSize: "0.78rem", fontWeight: 800 }}>
-                          #{ticket.movideskId}
-                        </Typography>
-
-                        <Typography
-                          title={ticket.subject}
-                          sx={{
-                            mt: 0.25,
-                            fontSize: "0.8rem",
-                            fontWeight: 650,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                          }}
-                        >
-                          {ticket.subject}
-                        </Typography>
-
-                        <Typography variant="caption" color="text.secondary">
-                          {ticket.client ?? "Sem cliente"} · {ticket.owner ?? "Sem responsável"}
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          sx={{ display: "block", mt: 0.2, color: "text.secondary" }}
-                        >
-                          Solução: {formatRemainingTime(ticket)}
-                        </Typography>
-                      </Box>
-
-                      <DeadlineMiniChip bucket={getDeadlineBucketFromTicket(ticket)} />
-                    </Stack>
-                  </Box>
-                ))}
-
-                {drilldown.tickets.length === 0 && (
-                  <EmptyState text="Nenhum atendimento compõe este indicador." />
-                )}
-              </Stack>
+              <TicketDrilldownExplorer key={drilldown.title} tickets={drilldown.tickets}
+                extra={(ticket) => <Stack direction="row" spacing={1} sx={{alignItems:"center",justifyContent:"space-between",mt:1}}>
+                  <Typography variant="caption" color="text.secondary">Solução: {formatRemainingTime(ticket)}</Typography>
+                  <DeadlineMiniChip bucket={getDeadlineBucketFromTicket(ticket)}/>
+                </Stack>}
+              />
             </>
           )}
         </Box>
       </Drawer>
-    </>
+    </Box>
   );
 }
 
@@ -1910,7 +1867,7 @@ function percentage(numerator: number, denominator: number) {
 }
 
 function isOpen(ticket: Ticket) {
-  return !["Resolved", "Closed", "Canceled"].includes(ticket.baseStatus ?? "");
+  return isOperationallyOpen(ticket);
 }
 
 function startOfDay(date: Date) {
@@ -2082,19 +2039,21 @@ function CardSectionHeader({
   info: CardInfo;
 }) {
   return (
-    <Box sx={{ position: "relative", textAlign: "center", minHeight: 42 }}>
-      <Box>
-        <Typography sx={{ fontWeight: 800, fontSize: "1rem" }}>
+    <Stack id={"section-" + encodeURIComponent(title)} direction="row" spacing={1.25} sx={{ alignItems: "center", justifyContent: "space-between", minWidth: 0 }}>
+      <Stack direction="row" spacing={1.1} sx={{ alignItems: "center", minWidth: 0 }}>
+        <Box sx={{ width: 40, height: 40, flex: "0 0 auto", display: "grid", placeItems: "center", borderRadius: 1.8, color: "primary.main", bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}><InsightsOutlined fontSize="small" /></Box>
+        <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 850, fontSize: "1.02rem", letterSpacing: "-.015em" }}>
           {title}
         </Typography>
 
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .15 }}>
           {subtitle}
         </Typography>
       </Box>
-
-      <Box sx={{ position: "absolute", right: 0, top: 0 }}><CardInfoButton info={info} /></Box>
-    </Box>
+      </Stack>
+      <Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} /><CardInfoButton info={info} /></Stack>
+    </Stack>
   );
 }
 

@@ -1,7 +1,7 @@
 
 import { ensureDatabaseAvailable, reportDatabaseFailure } from "../database/prisma";
 import { MovideskService } from "../services/MovideskService";
-import { movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
+import { MOVIDESK_RECONCILIATION_DAYS, movideskSyncIntervalMinutes } from "../domain/MovideskSyncPolicy";
 import { clearMovideskApiPriority, releaseMovideskApi, requestMovideskApiPriority, tryAcquireMovideskApi } from "./MovideskSyncCoordinator";
 
 const DEFAULT_INITIAL_DELAY_SECONDS = 5;
@@ -92,7 +92,7 @@ export class MovideskSyncScheduler {
       console.log([
         "[movidesk-sync] Sincronização concluída.",
         `modo=${s.mode}`, `desde=${s.since??"baseline"}`,
-        `reconciliacao7d=${s.reconciliation ? "sim" : "não"}`, `consultas=${s.queriedPages}`,
+        `reconciliacao=${s.reconciliation ? `${MOVIDESK_RECONCILIATION_DAYS}d` : "não"}`, `consultas=${s.queriedPages}`,
         `paginas=${s.pages}`, `total=${s.totalRows}`,
         `inseridos=${s.created}`, `atualizados=${s.updated}`,
         `ignorados=${s.ignored}`, `erros=${s.errors}`,

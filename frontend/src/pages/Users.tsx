@@ -1,4 +1,3 @@
-import { KpiGrid } from "../components/KpiGrid";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import {
   Alert,
@@ -14,13 +13,10 @@ import {
   DialogContentText,
   DialogTitle,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
+  Select,
+  MenuItem,
+  TextField,
   TablePagination,
-  TableRow,
   Typography,
 } from "@mui/material";
 
@@ -31,6 +27,7 @@ import {
   PersonOffOutlined,
   PeopleAltOutlined,
   RefreshOutlined,
+  ManageAccountsOutlined,
 } from "@mui/icons-material";
 
 import {
@@ -50,6 +47,7 @@ import {
   aliareColors,
 } from "../theme/theme";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 
 import type {
   UserApprovalStatus,
@@ -70,6 +68,8 @@ type ManagedUser = {
   email: string | null;
 
   role: UserRole;
+  jobFunction: string | null;
+  movideskOwnerName: string | null;
 
   active: boolean;
 
@@ -92,6 +92,15 @@ type ManagedUser = {
     string;
 };
 
+const JOB_FUNCTIONS = [
+  ["COORDENADOR", "Coordenador"],
+  ["LIDER", "Líder"],
+  ["SUPORTE_SIMER_N1", "Suporte SIMER · Nível 1"],
+  ["SUPORTE_SIMER_N2", "Suporte SIMER · Nível 2"],
+  ["SUPORTE_SIMER_N3", "Suporte SIMER · Nível 3"],
+  ["BANCO_DE_DADOS", "Banco de Dados"],
+] as const;
+
 type UsersResponse = {
   users: ManagedUser[];
 };
@@ -101,7 +110,9 @@ type ActionType =
   | "REJECT"
   | "ACTIVATE"
   | "DEACTIVATE"
-  | "SET_ADMIN";
+  | "SET_ADMIN"
+  | "SET_COORDINATOR"
+  | "SET_ANALYST";
 
 type ConfirmationState = {
   type: ActionType;
@@ -113,8 +124,11 @@ type ConfirmationState = {
    PAGE
 ========================================================= */
 
-export function Users() {
+export function Users({ embedded = false }: { embedded?: boolean } = {}) {
   const [usersPage, setUsersPage] = useState(0);
+  const [ownership, setOwnership] = useState<{byFunction:{function:string;tickets:number;owners:number}[];unmatched:{owner:string;tickets:number}[];linkedUsers:number;totalUsers:number;note:string} | null>(null);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [ownerEditing, setOwnerEditing] = useState<{id:number; value:string} | null>(null);
   const [
     users,
     setUsers,
@@ -180,9 +194,12 @@ export function Users() {
           setUsers(
             response.data.users
           );
+          setUsersLoaded(true);
+          void api.get<typeof ownership>("/users/ticket-ownership-by-function").then(result => setOwnership(result.data)).catch(() => setOwnership(null));
         } catch (
           requestError
         ) {
+          setUsersLoaded(false);
           setError(
             getErrorMessage(
               requestError
@@ -292,6 +309,8 @@ export function Users() {
             `/users/${user.id}/deactivate`;
           break;
 
+        case "SET_COORDINATOR":
+        case "SET_ANALYST":
         case "SET_ADMIN":
           endpoint =
             `/users/${user.id}/role`;
@@ -304,10 +323,8 @@ export function Users() {
           user: ManagedUser;
         }>(
           endpoint,
-          type === "SET_ADMIN"
-            ? {
-                role: "ADMIN",
-              }
+          ["SET_ADMIN", "SET_COORDINATOR", "SET_ANALYST"].includes(type)
+            ? { role: type === "SET_ADMIN" ? "ADMIN" : type === "SET_COORDINATOR" ? "COORDENADOR" : "ANALISTA" }
             : undefined
         );
 
@@ -344,6 +361,38 @@ export function Users() {
     }
   }
 
+  async function updateJobFunction(user: ManagedUser, jobFunction: string) {
+    setActionLoading(user.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await api.patch<{ message: string; user: ManagedUser }>(
+        `/users/${user.id}/job-function`,
+        { jobFunction: jobFunction || null },
+      );
+      setUsers(current => current.map(item => item.id === user.id ? response.data.user : item));
+      setSuccess(response.data.message);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function saveMovideskOwnerName() {
+    if (!ownerEditing) return;
+    setActionLoading(ownerEditing.id);
+    setError(null);
+    try {
+      const response = await api.patch<{message:string;user:ManagedUser}>(`/users/${ownerEditing.id}/movidesk-owner`, {movideskOwnerName: ownerEditing.value.trim() || null});
+      setUsers(current => current.map(user => user.id === response.data.user.id ? response.data.user : user));
+      setOwnerEditing(null);
+      setSuccess(response.data.message);
+      void api.get<typeof ownership>("/users/ticket-ownership-by-function").then(result => setOwnership(result.data)).catch(() => setOwnership(null));
+    } catch (requestError) { setError(getErrorMessage(requestError)); }
+    finally { setActionLoading(null); }
+  }
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -354,24 +403,8 @@ export function Users() {
     >
       {/* HEADER */}
 
-      <PageHeader eyebrow="Sistema" title="Usuários" description="Aprovação e controle de acesso ao Hub Suporte Simer." action={<Button
-          variant="outlined"
-          startIcon={
-            <RefreshOutlined />
-          }
-          onClick={() =>
-            void loadUsers()
-          }
-          disabled={
-            loading
-          }
-          sx={{
-            alignSelf: {
-              xs: "stretch",
-              sm: "center",
-            },
-          }}
-        >Atualizar</Button>} />
+      {!embedded && <PageHeader eyebrow="Sistema" title="Usuários" description="Gerencie perfis de acesso e funções organizacionais." action={<Button variant="outlined" startIcon={<RefreshOutlined />} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button>} />}
+      {embedded && <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"center"}}><Box><Typography variant="h6" sx={{fontWeight:850}}>Equipe e funções</Typography><Typography variant="body2" color="text.secondary">Gerencie perfis, funções e vínculos com responsáveis Movidesk.</Typography></Box><Button size="small" variant="outlined" startIcon={<RefreshOutlined/>} disabled={loading} onClick={()=>void loadUsers()}>Atualizar</Button></Stack>}
 
       {/* ALERTAS */}
 
@@ -399,7 +432,7 @@ export function Users() {
 
       {/* CARDS */}
 
-      <KpiGrid>
+      {usersLoaded && <Box sx={{display:"grid",gridTemplateColumns:{xs:"repeat(2,minmax(0,1fr))",md:"repeat(4,minmax(0,1fr))"},gap:2,width:"100%",minWidth:0,"& > *":{minWidth:0}}}>
         <SummaryCard
           label="Total"
           value={
@@ -439,7 +472,7 @@ export function Users() {
             <BlockOutlined />
           }
         />
-      </KpiGrid>
+      </Box>}
 
       {/* TABLE */}
 
@@ -466,199 +499,45 @@ export function Users() {
           }}
         >
           {loading ? (
-            <Box
-              sx={{
-                minHeight:
-                  320,
-
-                display:
-                  "flex",
-
-                alignItems:
-                  "center",
-
-                justifyContent:
-                  "center",
-              }}
-            >
-              <CircularProgress
-                size={32}
-                sx={{
-                  color:
-                    aliareColors.green,
-                }}
-              />
-            </Box>
+            <ContentState kind="loading" title="Carregando usuários" minHeight={320} />
           ) : (
             <>
-              <TableContainer>
-                <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>
-                      Usuário
-                    </TableCell>
-
-                    <TableCell>
-                      Perfil
-                    </TableCell>
-
-                    <TableCell>
-                      Aprovação
-                    </TableCell>
-
-                    <TableCell>
-                      Acesso
-                    </TableCell>
-
-                    <TableCell>
-                      Cadastro
-                    </TableCell>
-
-                    <TableCell
-                      align="right"
-                    >
-                      Ações
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {users.slice(usersPage * 10, usersPage * 10 + 10).map(
-                    (
-                      user
-                    ) => (
-                      <TableRow
-                        key={
-                          user.id
-                        }
-                        hover
-                      >
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight:
-                                700,
-                            }}
-                          >
-                            {user.name}
-                          </Typography>
-
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                          >
-                            @{user.username}
-
-                            {user.email
-                              ? ` · ${user.email}`
-                              : ""}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={
-                              getRoleLabel(
-                                user.role
-                              )
-                            }
-                            variant="outlined"
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <ApprovalChip
-                            status={
-                              user.approvalStatus
-                            }
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={
-                              user.active
-                                ? "Ativo"
-                                : "Inativo"
-                            }
-                            color={
-                              user.active
-                                ? "success"
-                                : "default"
-                            }
-                            variant={
-                              user.active
-                                ? "filled"
-                                : "outlined"
-                            }
-                          />
-                        </TableCell>
-
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                          >
-                            {formatDate(
-                              user.createdAt
-                            )}
-                          </Typography>
-                        </TableCell>
-
-                        <TableCell
-                          align="right"
-                        >
-                          <UserActions
-                            user={
-                              user
-                            }
-                            loading={
-                              actionLoading ===
-                              user.id
-                            }
-                            onAction={(
-                              type
-                            ) =>
-                              setConfirmation({
-                                type,
-                                user,
-                              })
-                            }
-                          />
-                        </TableCell>
-                      </TableRow>
-                    )
-                  )}
-
-                  {users.length ===
-                    0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={6}
-                      >
-                        <Box
-                          sx={{
-                            py: 6,
-
-                            textAlign:
-                              "center",
-                          }}
-                        >
-                          <Typography
-                            color="text.secondary"
-                          >
-                            Nenhum usuário encontrado.
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-                </Table>
-              </TableContainer>
+              <Box sx={{ display:"grid", gridTemplateColumns:{xs:"minmax(0,1fr)",lg:"repeat(2,minmax(0,1fr))"}, gap:1.5, p:2, minWidth:0 }}>
+                {users.slice(usersPage*10,usersPage*10+10).map(user=><Card key={user.id} variant="outlined" sx={{borderRadius:2.5,minWidth:0}}>
+                  <CardContent sx={{display:"flex",flexDirection:"column",gap:1.5}}>
+                    <Stack direction="row" spacing={1} sx={{justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <Box sx={{minWidth:0}}>
+                        <Typography sx={{fontWeight:800}} variant="subtitle2">{user.name}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{overflowWrap:"anywhere"}}>@{user.username}{user.email?` · ${user.email}`:""}</Typography>
+                      </Box>
+                      <Stack direction="row" spacing={.5} useFlexGap sx={{flexWrap:"wrap",justifyContent:"flex-end"}}>
+                        <Chip size="small" label={getRoleLabel(user.role)} variant="outlined"/>
+                        <ApprovalChip status={user.approvalStatus}/>
+                        <Chip size="small" color={user.active?"success":"default"} label={user.active?"Ativo":"Inativo"}/>
+                      </Stack>
+                    </Stack>
+                    <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"minmax(0,1fr) minmax(0,1fr)"},gap:1.5}}>
+                      <Box sx={{minWidth:0}}>
+                        <Typography variant="caption" color="text.secondary">Função na equipe</Typography>
+                        <Select size="small" fullWidth displayEmpty value={user.jobFunction??""} disabled={actionLoading!==null||user.approvalStatus!=="APPROVED"} onChange={event=>void updateJobFunction(user,event.target.value)} slotProps={{input:{"aria-label":`Função de ${user.name}`}}} sx={{mt:.5,fontSize:13,borderRadius:2}}>
+                          <MenuItem value=""><em>Sem função definida</em></MenuItem>
+                          {JOB_FUNCTIONS.map(([value,label])=><MenuItem key={value} value={value}>{label}</MenuItem>)}
+                        </Select>
+                      </Box>
+                      <Box sx={{minWidth:0}}>
+                        <Typography variant="caption" color="text.secondary">Responsável Movidesk</Typography>
+                        <Button fullWidth size="small" variant="outlined" disabled={actionLoading!==null} onClick={()=>setOwnerEditing({id:user.id,value:user.movideskOwnerName||""})} sx={{mt:.5,minHeight:40,justifyContent:"flex-start",textTransform:"none",overflow:"hidden"}}>
+                          <Typography noWrap variant="body2">{user.movideskOwnerName||"Vincular responsável"}</Typography>
+                        </Button>
+                      </Box>
+                    </Box>
+                    <Box sx={{borderTop:"1px solid",borderColor:"divider",pt:1.5,minWidth:0}}>
+                      <UserActions user={user} loading={actionLoading===user.id} onAction={type=>setConfirmation({type,user})}/>
+                    </Box>
+                  </CardContent>
+                </Card>)}
+                {users.length===0&&<Typography color="text.secondary" sx={{p:3}}>Nenhum usuário encontrado.</Typography>}
+              </Box>
 
               <TablePagination
                 component="div"
@@ -676,6 +555,33 @@ export function Users() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(ownerEditing)} onClose={() => actionLoading === null && setOwnerEditing(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Vincular responsável dos atendimentos</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>Informe exatamente o nome do responsável recebido do Movidesk. O vínculo permite relacionar atendimentos à função do colaborador sem alterar os dados importados.</Typography>
+          <TextField fullWidth label="Nome do responsável no Movidesk" value={ownerEditing?.value ?? ""} onChange={event => setOwnerEditing(current => current ? {...current,value:event.target.value} : null)} slotProps={{htmlInput:{maxLength:200}}}/>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={actionLoading !== null} onClick={() => setOwnerEditing(null)}>Cancelar</Button>
+          <Button variant="contained" disabled={actionLoading !== null} onClick={() => void saveMovideskOwnerName()}>Salvar vínculo</Button>
+        </DialogActions>
+      </Dialog>
+
+      {ownership && <Card variant="outlined" sx={{borderRadius:3}}>
+        <CardContent>
+          <Typography variant="h6" sx={{fontWeight:800}}>Atendimentos por função da equipe</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>{ownership.note} · {ownership.linkedUsers} de {ownership.totalUsers} usuários vinculados ao Movidesk.</Typography>
+          <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(3,minmax(0,1fr))"},gap:1.5}}>
+            {ownership.byFunction.map(row => <Box key={row.function} sx={{border:"1px solid",borderColor:"divider",borderRadius:2,p:2}}>
+              <Typography variant="caption" color="text.secondary">{JOB_FUNCTIONS.find(item=>item[0]===row.function)?.[1] || "Sem função definida"}</Typography>
+              <Typography variant="h5" sx={{fontWeight:850}}>{row.tickets.toLocaleString("pt-BR")}</Typography>
+              <Typography variant="caption" color="text.secondary">{row.owners} colaborador(es) vinculado(s)</Typography>
+            </Box>)}
+          </Box>
+          {ownership.unmatched.length > 0 && <Alert severity="info" sx={{mt:2}}>Há {ownership.unmatched.length} responsáveis não vinculados entre os 30 principais. Exemplos: {ownership.unmatched.slice(0,5).map(item=>item.owner).join(", ")}. Vincule-os acima para classificar seus atendimentos por função.</Alert>}
+        </CardContent>
+      </Card>}
 
       {/* CONFIRMAÇÃO */}
 
@@ -784,166 +690,23 @@ function SummaryCard({
    ACTIONS
 ========================================================= */
 
-function UserActions({
-  user,
-  loading,
-  onAction,
-}: {
-  user: ManagedUser;
-  loading: boolean;
-  onAction: (
-    type: ActionType
-  ) => void;
-}) {
-  if (
-    user.role ===
-    "ADMIN"
-  ) {
-    return (
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        Administrador
-      </Typography>
-    );
+function UserActions({ user, loading, onAction }: { user: ManagedUser; loading: boolean; onAction: (type: ActionType) => void }) {
+  if (user.approvalStatus === "PENDING" || user.approvalStatus === "REJECTED") {
+    return <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+      <Button size="small" variant="outlined" disabled={loading} onClick={() => onAction("APPROVE")}>Aprovar</Button>
+      {user.approvalStatus === "PENDING" && <Button size="small" color="error" disabled={loading} onClick={() => onAction("REJECT")}>Rejeitar</Button>}
+    </Stack>;
   }
-
-  if (
-    user.approvalStatus ===
-    "PENDING"
-  ) {
-    return (
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          justifyContent:
-            "flex-end",
-        }}
-      >
-        <Button
-          size="small"
-          variant="contained"
-          disabled={
-            loading
-          }
-          onClick={() =>
-            onAction(
-              "APPROVE"
-            )
-          }
-          sx={{
-            backgroundColor:
-              aliareColors.greenDark,
-
-            "&:hover": {
-              backgroundColor:
-                aliareColors.greenDark,
-            },
-          }}
-        >
-          Aprovar
-        </Button>
-
-        <Button
-          size="small"
-          color="error"
-          disabled={
-            loading
-          }
-          onClick={() =>
-            onAction(
-              "REJECT"
-            )
-          }
-        >
-          Rejeitar
-        </Button>
-      </Stack>
-    );
-  }
-
-  if (
-    user.approvalStatus ===
-    "REJECTED"
-  ) {
-    return (
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "APPROVE"
-          )
-        }
-      >
-        Aprovar
-      </Button>
-    );
-  }
-
-  return user.active ? (
-    <Stack
-      direction="row"
-      spacing={1}
-      sx={{
-        justifyContent:
-          "flex-end",
-      }}
-    >
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "SET_ADMIN"
-          )
-        }
-      >
-        Tornar administrador
-      </Button>
-
-      <Button
-        size="small"
-        color="error"
-        startIcon={
-          <PersonOffOutlined />
-        }
-        disabled={
-          loading
-        }
-        onClick={() =>
-          onAction(
-            "DEACTIVATE"
-          )
-        }
-      >
-        Desativar
-      </Button>
-    </Stack>
-  ) : (
-    <Button
-      size="small"
-      variant="outlined"
-      disabled={
-        loading
-      }
-      onClick={() =>
-        onAction(
-          "ACTIVATE"
-        )
-      }
-    >
-      Ativar
-    </Button>
-  );
+  return <Stack direction="row" spacing={1} useFlexGap sx={{ justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+    {user.active && <>
+      <Button size="small" startIcon={<ManageAccountsOutlined />} variant="outlined" disabled={loading || user.role === "ANALISTA"} onClick={() => onAction("SET_ANALYST")}>Analista</Button>
+      <Button size="small" variant="outlined" disabled={loading || user.role === "COORDENADOR"} onClick={() => onAction("SET_COORDINATOR")}>Coordenador</Button>
+      <Button size="small" variant="outlined" disabled={loading || user.role === "ADMIN"} onClick={() => onAction("SET_ADMIN")}>Admin</Button>
+    </>}
+    {user.role !== "ADMIN" && (user.active
+      ? <Button size="small" color="error" startIcon={<PersonOffOutlined />} disabled={loading} onClick={() => onAction("DEACTIVATE")}>Desativar</Button>
+      : <Button size="small" variant="outlined" disabled={loading} onClick={() => onAction("ACTIVATE")}>Ativar</Button>)}
+  </Stack>;
 }
 
 /* =========================================================
@@ -1006,39 +769,6 @@ function getRoleLabel(
   }
 }
 
-function formatDate(
-  value:
-    string | null | undefined
-) {
-  if (!value) {
-    return "—";
-  }
-
-  const date =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "—";
-  }
-
-  return new Intl.DateTimeFormat(
-    "pt-BR",
-    {
-      dateStyle:
-        "short",
-
-      timeStyle:
-        "short",
-    }
-  ).format(
-    date
-  );
-}
-
 function getActionTitle(
   type:
     ActionType | undefined
@@ -1058,6 +788,10 @@ function getActionTitle(
 
     case "SET_ADMIN":
       return "Conceder acesso administrativo";
+    case "SET_COORDINATOR":
+      return "Alterar perfil para coordenador";
+    case "SET_ANALYST":
+      return "Alterar perfil para analista";
 
     default:
       return "Confirmar operação";
@@ -1087,6 +821,12 @@ function getActionDescription(
 
     case "DEACTIVATE":
       return `Deseja desativar o acesso de ${name}? As sessões abertas desse usuário serão encerradas.`;
+    case "SET_ADMIN":
+      return `Conceder acesso integral de administrador a ${name}? Esta conta poderá administrar todos os usuários e acessar todas as rotinas.`;
+    case "SET_COORDINATOR":
+      return `Alterar ${name} para coordenador? As Centrais da Coordenação e de Liderança Técnica continuarão exigindo liberação individual.`;
+    case "SET_ANALYST":
+      return `Alterar ${name} para analista? As permissões específicas existentes serão revisadas conforme o perfil selecionado.`;
   }
 }
 
@@ -1115,5 +855,8 @@ function getErrorMessage(
     }
   }
 
-  return "Não foi possível concluir a operação.";
+  if (axios.isAxiosError(error) && error.response) {
+    return `Falha na administração de usuários (HTTP ${error.response.status}). Verifique o backend e seus logs.`;
+  }
+  return "Não foi possível concluir a operação de administração de usuários.";
 }

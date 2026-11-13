@@ -114,6 +114,7 @@ const USER_PUBLIC_SELECT = {
   username: true,
   email: true,
   role: true,
+  jobFunction: true,
   permissions: true,
   active: true,
 
@@ -1320,7 +1321,7 @@ export class AuthService {
     if (!file.size || file.size > 2 * 1024 * 1024) throw new AuthError("A foto deve possuir no máximo 2 MB.", 400);
     const updatedAt = new Date();
     await prisma.$transaction([
-      prisma.user.update({ where: { id: userId }, data: { avatarData: file.buffer, avatarMimeType: file.mimetype, avatarUpdatedAt: updatedAt } }),
+      prisma.user.update({ where: { id: userId }, data: { avatarData: Uint8Array.from(file.buffer), avatarMimeType: file.mimetype, avatarUpdatedAt: updatedAt } }),
       prisma.auditLog.create({ data: { userId, action: "PROFILE_AVATAR_UPDATED", entity: "User", entityId: String(userId), metadata: { mimeType: file.mimetype, size: file.size } } }),
     ]);
     return { avatarUpdatedAt: updatedAt };

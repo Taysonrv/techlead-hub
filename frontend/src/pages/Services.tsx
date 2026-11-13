@@ -1,9 +1,11 @@
 import { KpiGrid } from "../components/KpiGrid";
 import { subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
-import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography, useTheme } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Card, CardContent, Chip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography, useTheme } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
 import { PageHeader } from "../components/PageHeader";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import { KpiCard } from "../components/KpiCard";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
@@ -26,7 +28,7 @@ export function Services() {
   const theme = useTheme(); const navigate = useNavigate();
   const [data,setData]=useState<Data|null>(null); const [loading,setLoading]=useState(true); const [error,setError]=useState("");
   const [client,setClient]=useState(""); const [analyst,setAnalyst]=useState("");
-  const [periodPreset,setPeriodPreset]=useState("6m");
+  const [periodPreset,setPeriodPreset]=useState("thisMonth");
   const [customStart,setCustomStart]=useState("");
   const [customEnd,setCustomEnd]=useState("");
   const periodParams=useCallback(()=>{
@@ -50,12 +52,12 @@ export function Services() {
       <Autocomplete size="small" options={data?.filters.clients??[]} value={client||null} onChange={(_,v)=>setClient(v??"")} renderInput={(p)=><TextField {...p} label="Cliente"/>}/>
       <Autocomplete size="small" options={data?.filters.analysts??[]} value={analyst||null} onChange={(_,v)=>setAnalyst(v??"")} renderInput={(p)=><TextField {...p} label="Analista"/>}/>
       <FormControl size="small"><InputLabel id="services-select-1-label">Período</InputLabel><Select labelId="services-select-1-label" inputProps={{ id: "services-select-1", "aria-labelledby": "services-select-1-label" }} label="Período" value={periodPreset} onChange={(e)=>setPeriodPreset(String(e.target.value))}><MenuItem value="thisMonth">Este mês</MenuItem><MenuItem value="lastMonth">Mês passado</MenuItem><MenuItem value="3m">3 meses</MenuItem><MenuItem value="6m">6 meses</MenuItem><MenuItem value="9m">9 meses</MenuItem><MenuItem value="12m">12 meses</MenuItem><MenuItem value="24m">24 meses</MenuItem><MenuItem value="custom">Personalizado</MenuItem></Select></FormControl>
-      <Button disabled={!client&&!analyst&&periodPreset==="6m"&&!customStart&&!customEnd} onClick={()=>{setClient("");setAnalyst("");setPeriodPreset("6m");setCustomStart("");setCustomEnd("");}}>Limpar</Button>
+      <Button disabled={!client&&!analyst&&periodPreset==="thisMonth"&&!customStart&&!customEnd} onClick={()=>{setClient("");setAnalyst("");setPeriodPreset("thisMonth");setCustomStart("");setCustomEnd("");}}>Limpar</Button>
       {periodPreset==="custom"&&<><TextField size="small" type="date" label="Data inicial" value={customStart} onChange={(e)=>setCustomStart(e.target.value)} slotProps={{inputLabel:{shrink:true}}}/><TextField size="small" type="date" label="Data final" value={customEnd} onChange={(e)=>setCustomEnd(e.target.value)} slotProps={{inputLabel:{shrink:true}}}/></>}
     </Box></CardContent></Card>
     {error&&<Alert severity="error" sx={{mt:2}}>{error}</Alert>}
     {loading&&<Typography variant="caption" sx={{display:"block",mt:1}}>Atualizando serviços…</Typography>}
-    {loading&&!data?<Box sx={{py:10,display:"grid",placeItems:"center"}}><CircularProgress/></Box>:data&&<Stack spacing={2} sx={{mt:2}}>
+    {loading && !data ? <AsyncState status="loading" data={data} loading={<ContentState kind="loading" title="Carregando serviços" minHeight={360} />}>{() => null}</AsyncState> : error && !data ? <AsyncState status="error" data={data} error={error}>{() => null}</AsyncState> : data && <Stack spacing={2} sx={{mt:2}}>
       <KpiGrid>
         <KpiCard title="Classificação específica" value={data.total ? `${data.classificationRate}%` : "—"} subtitle={`${data.specific} atendimento(s)`} info="Percentual de tickets com Serviço específico no período." accent={aliareColors.green}/>
         <KpiCard title="SIMER genérico" value={data.generic} subtitle="Requer revisão" info="Classificações somente em níveis genéricos do SIMER." onClick={()=>navigate("/qualidade-dados?issue=genericSimerService")} accent={aliareColors.warning}/>
@@ -66,7 +68,7 @@ export function Services() {
       </KpiGrid>
       <Card variant="outlined"><CardContent><Stack direction={{xs:"column",md:"row"}} spacing={1.5} sx={{alignItems:{md:"center"},justifyContent:"space-between"}}><Box><Typography variant="h6" sx={{fontWeight:850}}>Comparação com o período anterior</Typography><Typography variant="body2" color="text.secondary">Compara o período selecionado com a janela imediatamente anterior de mesma duração, usando o mesmo filtro de cliente e analista.</Typography></Box><Stack direction="row" spacing={1} sx={{flexWrap:"wrap"}}><Chip label={`Volume ${data.comparison.volumeDelta >= 0 ? "+" : ""}${data.comparison.volumeDelta}%`} color={data.comparison.volumeDelta > 0 ? "warning" : "success"} variant="outlined"/><Chip label={`Qualidade ${data.comparison.classificationDelta >= 0 ? "+" : ""}${data.comparison.classificationDelta} p.p.`} color={data.comparison.classificationDelta >= 0 ? "success" : "warning"} variant="outlined"/><Chip label={`Anterior: ${data.comparison.previousClassificationRate}% específicos`} variant="outlined"/></Stack></Stack></CardContent></Card>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",xl:"minmax(0,1.25fr) minmax(0,.75fr)"},gap:2}}>
-        <Card variant="outlined"><CardContent><Typography variant="h6" sx={{fontWeight:850}}>Evolução mensal da classificação</Typography><Typography variant="body2" color="text.secondary">Acompanhe a evolução do uso de Serviços específicos e das pendências.</Typography><Box sx={{height:320,mt:2}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false}/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis allowDecimals={false}/><ChartTooltip contentStyle={tooltip}/><Line type="monotone" dataKey="specific" name="Específico" stroke={aliareColors.green} strokeWidth={2}/><Line type="monotone" dataKey="generic" name="Genérico" stroke={aliareColors.warning} strokeWidth={2}/><Line type="monotone" dataKey="suspected" name="Possível incorreto" stroke={aliareColors.info} strokeWidth={2}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
+        <Card variant="outlined"><CardContent><Typography variant="h6" sx={{fontWeight:850}}>Evolução mensal da classificação</Typography><Typography variant="body2" color="text.secondary">Acompanhe a evolução do uso de Serviços específicos e das pendências.</Typography><Box sx={{height:320,mt:2}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trend}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" vertical={false}/><XAxis dataKey="month" tick={{fontSize:11}}/><YAxis allowDecimals={false}/><ChartTooltip contentStyle={tooltip}/><Line type="linear" dataKey="specific" name="Específico" stroke={aliareColors.green} strokeWidth={2}/><Line type="linear" dataKey="generic" name="Genérico" stroke={aliareColors.warning} strokeWidth={2}/><Line type="linear" dataKey="suspected" name="Possível incorreto" stroke={aliareColors.info} strokeWidth={2}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
         <Card variant="outlined"><CardContent><Typography variant="h6" sx={{fontWeight:850}}>Demanda por módulo</Typography><Typography variant="body2" color="text.secondary">Módulos com maior volume no recorte · clique em uma barra para investigar os tickets.</Typography><Box sx={{height:320,mt:2}}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.modules.slice(0,8)} layout="vertical" margin={{left:12}}><CartesianGrid stroke={theme.palette.divider} strokeDasharray="4 4" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="module" width={135} tick={{fontSize:10}}/><ChartTooltip contentStyle={tooltip}/><Bar dataKey="count" name="Atendimentos" radius={[0,6,6,0]} cursor="pointer" onClick={(_,index)=>{const item=data.modules.slice(0,8)[index];if(item?.module)openService(item.module)}}>{data.modules.slice(0,8).map((item,index)=><Cell key={item.module} fill={chartColors[index%chartColors.length]}/>)}</Bar></BarChart></ResponsiveContainer></Box></CardContent></Card>
       </Box>
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"repeat(2,1fr)"},gap:2}}>

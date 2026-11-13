@@ -1,4 +1,5 @@
 import { buildMovideskAdaptiveCard, type MovideskAlertTicket } from "./MovideskTeamsAdaptiveCard";
+import type { AdaptiveCard } from "./TeamsWorkflowAdaptiveCards";
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_TIMEOUT_MS = 30_000;
@@ -66,6 +67,20 @@ export class TeamsWorkflowWebhookService {
     }
 
     const card = buildMovideskAdaptiveCard(ticket, baseUrl);
+    return this.sendCard(endpoint, card);
+  }
+
+  async sendCard(endpoint: string, card: AdaptiveCard): Promise<TeamsWebhookResult> {
+    let webhook: URL;
+    try {
+      webhook = new URL(endpoint.trim());
+    } catch {
+      throw new Error("URL do Workflow do Teams inválida.");
+    }
+    if (webhook.protocol !== "https:" || webhook.username || webhook.password) {
+      throw new Error("URL do Workflow do Teams deve ser HTTPS.");
+    }
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), configuredTimeout());
     const startedAt = Date.now();

@@ -1,3 +1,5 @@
+@import "./theme/design-tokens.css";
+
 /* =========================================================
    RESET GLOBAL
 ========================================================= */
@@ -410,5 +412,376 @@ svg {
 
   .techlead-page-surface .recharts-legend-wrapper {
     font-size: .72rem !important;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVIDADE — TABELAS E AÇÕES EXECUTIVAS
+   Mantém a rolagem horizontal dentro do painel, sem ampliar
+   a largura da janela Web ou do Electron.
+========================================================= */
+.techlead-page-surface .MuiTableContainer-root {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.techlead-page-surface .MuiTable-root {
+  font-variant-numeric: tabular-nums;
+}
+
+.techlead-page-surface .MuiCard-root,
+.techlead-page-surface .MuiPaper-root {
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .techlead-page-surface .MuiCardContent-root {
+    overflow-wrap: anywhere;
+  }
+
+  .techlead-page-surface .MuiTableCell-root {
+    padding: 10px 12px;
+  }
+
+  .techlead-page-surface .MuiDialog-paper {
+    max-width: calc(100vw - 24px);
+  }
+}
+
+
+/* Sidebar em modo ícones: preserva links, grupos e badges originais. */
+.techlead-sidebar--collapsed .techlead-sidebar-identity {
+  display: none;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemText-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root > .MuiIconButton-root,
+.techlead-sidebar--collapsed .techlead-sidebar-meta {
+  display: none;
+}
+/* No modo compacto, nenhum chevron de expansão ocupa espaço de navegação. */
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ExpandMoreRoundedIcon"],
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ExpandLessRoundedIcon"],
+.techlead-sidebar--collapsed .MuiDrawer-paper nav svg[data-testid="ChevronRightRoundedIcon"] {
+  display: none;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav {
+  padding-inline: 8px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav + nav {
+  border-top: 1px solid rgba(255,255,255,.075);
+  padding-top: 7px;
+  margin-top: 7px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root {
+  min-height: 44px;
+  border-radius: 11px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root.active {
+  background: rgba(24,199,122,.15);
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root,
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemButton-root {
+  justify-content: center;
+  padding-inline: 8px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper .MuiListItemIcon-root {
+  min-width: 0;
+  justify-content: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-sidebar .MuiDrawer-paper { transition: none; }
+}
+
+
+/* Navegação lateral: foco visível, feedback consistente e animação reduzida. */
+.techlead-sidebar .MuiDrawer-paper nav .MuiListItemButton-root {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.techlead-sidebar .MuiDrawer-paper nav .MuiListItemButton-root:focus-visible,
+.techlead-sidebar .MuiDrawer-paper button:focus-visible {
+  outline: 2px solid #52d7b0;
+  outline-offset: -2px;
+}
+.techlead-sidebar--collapsed .MuiDrawer-paper nav .MuiListItemButton-root:hover {
+  background: rgba(24,199,122,.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-sidebar,
+  .techlead-sidebar .MuiDrawer-paper,
+  .techlead-sidebar .MuiDrawer-paper * {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dashboard executivo — referência visual: cards luminosos e gráficos em camadas.
+   Estilização limitada ao Dashboard; números e séries vêm das consultas existentes. */
+.techlead-executive-dashboard {
+  --dashboard-glow-blue: rgba(20, 144, 255, .14);
+  --dashboard-glow-teal: rgba(24, 199, 176, .11);
+  min-width: 0;
+}
+
+.techlead-executive-dashboard .MuiCard-root {
+  border-radius: 16px;
+  position: relative;
+  isolation: isolate;
+  border-color: var(--hub-border);
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.techlead-executive-dashboard [data-kpi-card] {
+  background-image:
+    radial-gradient(ellipse at 100% 100%, var(--dashboard-glow-blue), transparent 65%),
+    linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+  box-shadow: var(--hub-shadow-card);
+}
+
+.techlead-executive-dashboard [data-kpi-card]:nth-child(even) {
+  background-image:
+    radial-gradient(ellipse at 100% 100%, var(--dashboard-glow-teal), transparent 65%),
+    linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+}
+
+.techlead-executive-dashboard .MuiCard-root:hover {
+  border-color: var(--hub-accent);
+}
+
+.techlead-executive-dashboard .recharts-cartesian-grid line {
+  stroke-opacity: .38;
+}
+
+.techlead-executive-dashboard .recharts-line-curve,
+.techlead-executive-dashboard .recharts-area-curve {
+  stroke-width: 2.5px;
+  filter: drop-shadow(0 0 4px rgba(32, 171, 238, .17));
+}
+
+.techlead-executive-dashboard .recharts-bar-rectangle {
+  opacity: .94;
+}
+
+.techlead-executive-dashboard .recharts-default-tooltip {
+  border: 1px solid var(--hub-border) !important;
+  border-radius: 12px !important;
+}
+
+@media (max-width: 600px) {
+  .techlead-executive-dashboard .MuiCardContent-root { padding: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .techlead-executive-dashboard .MuiCard-root { transition: none; }
+  .techlead-executive-dashboard .recharts-line-curve,
+  .techlead-executive-dashboard .recharts-area-curve { filter: none; }
+}
+
+
+/* Dashboard: 4 KPIs por linha em desktop amplo, sem alterar indicadores. */
+.techlead-executive-dashboard .techlead-dashboard-kpis {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+}
+@media (min-width: 640px) {
+  .techlead-executive-dashboard .techlead-dashboard-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1180px) {
+  .techlead-executive-dashboard .techlead-dashboard-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+.techlead-executive-dashboard .techlead-dashboard-kpis [data-kpi-card] {
+  min-width: 0;
+  height: 100%;
+}
+.techlead-executive-dashboard .MuiCardContent-root {
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .techlead-executive-dashboard .techlead-dashboard-kpis {
+    gap: 12px;
+  }
+}
+
+
+/* Clientes — mesmo acabamento executivo do Dashboard, preservando o
+   relatório de apresentação/PDF e os gráficos alimentados pelo Movidesk. */
+@media screen {
+  .techlead-executive-clients {
+    --clients-glow-blue: rgba(20, 144, 255, .12);
+    --clients-glow-teal: rgba(24, 199, 176, .10);
+    min-width: 0;
+  }
+
+  .techlead-executive-clients .MuiCard-root:not(#client-export-content) {
+    border-radius: 16px;
+    border-color: var(--hub-border);
+    box-shadow: var(--hub-shadow-card);
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+
+  .techlead-executive-clients .MuiCard-root:not(#client-export-content):hover {
+    border-color: var(--hub-accent);
+  }
+
+  .techlead-executive-clients .techlead-clients-primary-kpis [data-kpi-card] {
+    background-image:
+      radial-gradient(ellipse at 100% 100%, var(--clients-glow-blue), transparent 65%),
+      linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+  }
+
+  .techlead-executive-clients .techlead-clients-primary-kpis > :nth-child(even)[data-kpi-card] {
+    background-image:
+      radial-gradient(ellipse at 100% 100%, var(--clients-glow-teal), transparent 65%),
+      linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface)) !important;
+  }
+
+  .techlead-executive-clients .MuiCardContent-root,
+  .techlead-executive-clients .recharts-responsive-container {
+    min-width: 0;
+  }
+
+  .techlead-executive-clients .recharts-cartesian-grid line {
+    stroke-opacity: .4;
+  }
+
+  .techlead-executive-clients .recharts-line-curve {
+    stroke-width: 2.5px;
+    filter: drop-shadow(0 0 4px rgba(32, 171, 238, .16));
+  }
+
+  .techlead-executive-clients .recharts-default-tooltip {
+    border: 1px solid var(--hub-border) !important;
+    border-radius: 12px !important;
+  }
+
+  .techlead-executive-clients .MuiTableContainer-root {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .techlead-executive-clients .MuiTable-root {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .techlead-executive-clients .MuiTableCell-root { padding: 10px 12px; }
+  .techlead-executive-clients .MuiCardContent-root { overflow-wrap: anywhere; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .techlead-executive-clients .MuiCard-root:not(#client-export-content) { transition: none; }
+  .techlead-executive-clients .recharts-line-curve { filter: none; }
+}
+
+
+/* Terceira etapa: hierarquia de gráficos e painéis do Dashboard. */
+.techlead-executive-dashboard .techlead-dashboard-featured > * {
+  min-width: 0;
+}
+.techlead-executive-dashboard .techlead-dashboard-featured-summary {
+  background-image:
+    radial-gradient(ellipse at 100% 0%, rgba(24,199,176,.11), transparent 70%),
+    linear-gradient(145deg, var(--hub-surface-raised), var(--hub-surface));
+}
+.techlead-executive-dashboard .techlead-dashboard-analysis-grid > * {
+  min-width: 0;
+  height: 100%;
+}
+.techlead-executive-dashboard .techlead-dashboard-analysis-grid .MuiCard-root {
+  box-shadow: var(--hub-shadow-card);
+}
+@media (min-width: 1536px) {
+  .techlead-executive-dashboard .techlead-dashboard-featured .recharts-responsive-container {
+    min-height: 340px;
+  }
+}
+@media (max-width: 600px) {
+  .techlead-executive-dashboard .techlead-dashboard-featured-summary .MuiCardContent-root {
+    padding: 16px;
+  }
+}
+
+
+/* =========================================================
+   POLIMENTO TRANSVERSAL — TELAS AUTENTICADAS
+   Aplica a mesma hierarquia do Dashboard sem alterar conteúdo,
+   lógica, densidade de dados ou layouts especiais (chat/login).
+========================================================= */
+.techlead-page-surface:not(.techlead-chat-workspace) {
+  min-width: 0;
+}
+.techlead-page-surface > :is(.MuiBox-root, .MuiStack-root, .MuiGrid-root) {
+  min-width: 0;
+}
+.techlead-page-surface .MuiCard-root,
+.techlead-page-surface .MuiPaper-root {
+  min-width: 0;
+}
+.techlead-page-surface .MuiCardHeader-title,
+.techlead-page-surface .MuiCardContent-root > .MuiTypography-h6 {
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.techlead-page-surface .MuiCardHeader-subheader {
+  line-height: 1.45;
+}
+.techlead-page-surface .MuiTableContainer-root {
+  max-width: 100%;
+  border-radius: var(--hub-radius-md);
+  overscroll-behavior-inline: contain;
+}
+.techlead-page-surface .MuiTableHead-root .MuiTableCell-root {
+  background-color: var(--hub-surface-raised);
+  color: var(--hub-text-secondary);
+  white-space: nowrap;
+}
+.techlead-page-surface .MuiTableBody-root .MuiTableCell-root {
+  vertical-align: middle;
+}
+.techlead-page-surface .MuiTableBody-root .MuiTableRow-root:last-child .MuiTableCell-root {
+  border-bottom-color: transparent;
+}
+.techlead-page-surface .MuiChip-root {
+  max-width: 100%;
+}
+.techlead-page-surface .MuiChip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.techlead-page-surface .recharts-responsive-container {
+  min-width: 0;
+}
+.techlead-page-surface .recharts-tooltip-wrapper {
+  z-index: 4;
+}
+.techlead-page-surface .MuiSkeleton-root {
+  border-radius: var(--hub-radius-sm);
+}
+@media (max-width: 600px) {
+  .techlead-page-surface .MuiCardHeader-root {
+    padding: 16px;
+  }
+  .techlead-page-surface .MuiTableCell-root {
+    padding: 10px 12px;
+  }
+  .techlead-page-surface .MuiCardActions-root {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .techlead-page-surface .MuiCard-root,
+  .techlead-page-surface .MuiPaper-root,
+  .techlead-page-surface .MuiTableRow-root {
+    transition: none;
   }
 }

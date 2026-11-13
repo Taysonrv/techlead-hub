@@ -46,7 +46,7 @@ export function requirePermission(permission: string) {
 
     const allowed = Array.isArray(auth.permissions)
       ? auth.permissions.includes(permission)
-      : auth.role === "COORDENADOR" || DEFAULT_ANALYST_PERMISSIONS.has(permission);
+      : (auth.role === "COORDENADOR" && !["coordination", "technical-leadership"].includes(permission)) || DEFAULT_ANALYST_PERMISSIONS.has(permission);
 
     if (!allowed) {
       return response.status(403).json({

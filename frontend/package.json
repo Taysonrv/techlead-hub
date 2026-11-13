@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "node --test tests/*.test.mjs",
-    "lint": "oxlint && node scripts/check-a11y.mjs",
+    "lint": "oxlint src && node scripts/check-a11y.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

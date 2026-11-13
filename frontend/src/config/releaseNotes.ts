@@ -9,9 +9,58 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
+export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || (import.meta.env.PROD ? "2.1.0-rc.14" : "development");
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.14": {
+    version: "2.1.0-rc.14",
+    title: "Resultados por cliente, entregas e experiência Desktop",
+    items: [
+      {title:"Resultados da Equipe",description:"Gráficos com renderização SVG/HTML independente de dimensões automáticas, cards proporcionais e consulta por ponto; cards padronizados, CSAT por data de pesquisa, rankings completos e entregas filtradas por responsável e período."},
+      {title:"Clientes e comparações",description:"Tela integrada com indicadores padronizados, comparação entre períodos, evolução mensal, métricas de qualidade e exportação em PDF no cabeçalho."},
+      {title:"Correções e versões",description:"Entregas por data oficial de conclusão no Azure, deduplicação de Tasks, evolução de seis meses e rastreabilidade por versão e atendimento."},
+      {title:"Gráficos mais diretos",description:"Legendas clicáveis para ocultar séries e consulta por mês ao clicar nos pontos; participação por cliente oculta no foco individual."},
+      {title:"Liderança e coordenação",description:"Acompanhamento de resolutividade, evidências de OKRs e espaço semanal de coordenação com controle de acesso."},
+      {title:"Pendências e favoritos",description:"Pendências públicas com critérios temporais revisados e atalhos de cards e rotinas favoritos."},
+      {title:"Popups de notificações",description:"Avisos recentes habilitados aparecem na interface; a fila preserva excedentes e avisos do Windows não dependem da permissão do navegador Electron."},
+      {title:"Clima no aplicativo",description:"Chave WeatherAPI central, criptografada e configurável por administrador; a política de segurança permite os ícones oficiais do provedor."},
+      {title:"Confiabilidade",description:"Revisão de denominadores de SLA, resolução no primeiro contato, CSAT pela data da pesquisa e distinção entre entrega registrada e instalação no cliente."},
+    ],
+  },
+  "2.1.0-rc.11": {
+    version: "2.1.0-rc.11",
+    title: "Recuperação de integrações mais confiável",
+    items: [
+      { title: "Importação de .env do Windows", description: "Arquivos com BOM UTF-8 agora são lidos corretamente ao recuperar a SYSTEM_CONFIG_KEY." },
+      { title: "Prioridade da chave recuperada", description: "No Desktop instalado, a chave protegida pelo Windows prevalece sobre uma variável de ambiente antiga após reiniciar." },
+      { title: "Diagnóstico mais claro", description: "A conectividade do banco é informada separadamente da compatibilidade da chave de criptografia." },
+    ],
+  },
+  "2.1.0-rc.10": {
+    version: "2.1.0-rc.10",
+    title: "Configuração central protegida e instalação mais confiável",
+    items: [
+      { title: "Configurações somente para administradores", description: "Todos podem consultar o estado das integrações; apenas administradores podem alterar credenciais, fluxos e parâmetros do sistema." },
+      { title: "Compatibilidade com credenciais legadas", description: "Na recuperação confirmada, configurações antigas que ainda possam ser lidas na instalação de origem podem ser migradas para a chave compartilhada." },
+      { title: "Diagnóstico de versão", description: "O diagnóstico do Desktop exibe a versão instalada corretamente." },
+      { title: "Publicação sem certificado obrigatório", description: "A assinatura do instalador é opcional. Sem ela, o Windows pode exibir um aviso do SmartScreen ao instalar." },
+    ],
+  },
+  "2.1.0-rc.9": {
+    version: "2.1.0-rc.9",
+    title: "Operação mais confiável, notificações e experiência renovada",
+    items: [
+      { title: "Dashboard executivo", description: "Cards, gráficos, filtros e indicadores foram padronizados; as séries temporais usam linhas retas e as regras de leitura operacional foram revisadas." },
+      { title: "Pendências por analista", description: "Filtros e indicadores foram alinhados à finalidade da tela, com correções para evitar tarefas concluídas como pendências e melhorar a leitura da dívida operacional." },
+      { title: "Alertas no Teams", description: "Novos fluxos podem avisar sobre tickets Novos encaminhados ao Suporte e Tasks Azure abertas pelo N3 ou retornadas a Registro, com controle individual nas configurações." },
+      { title: "Notificações no Desktop", description: "Avisos podem aparecer com som quando o aplicativo está minimizado; eles desaparecem após alguns segundos e permanecem no sino para leitura posterior." },
+      { title: "Acompanhamento de Tasks", description: "O painel lateral prioriza a última alteração registrada e organiza as ações rápidas em uma área mais compacta." },
+      { title: "Calendário com previsão", description: "A cidade de previsão fica associada ao usuário, com localização brasileira mais precisa e informações meteorológicas resumidas nos dias disponíveis." },
+      { title: "Navegação e identidade visual", description: "Ícones, cards, sidebar e gráficos receberam ajustes de consistência, responsividade e apresentação nos temas claro e escuro." },
+      { title: "Atualização e recuperação", description: "A inicialização do Desktop cria estruturas compatíveis do banco local, preservando configurações e notificações após a atualização." },
+      { title: "Sincronizações mais seguras", description: "Importações completas e históricas não são tratadas como eventos novos para alertas, evitando notificações antigas em massa no Teams." },
+    ],
+  },
   "2.1.0-rc.8": {
     version: "2.1.0-rc.8",
     title: "Detalhamento operacional e acompanhamento Azure",

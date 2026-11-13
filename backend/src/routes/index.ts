@@ -59,9 +59,14 @@ import { sessionRoutes } from "./session.routes";
 import { movideskRoutes } from "./movidesk.routes";
 import { chatRoutes } from "./chat.routes";
 import { coordinationRoutes } from "./coordination.routes";
+import { teamResultsMeetingRoutes } from "./team-results-meetings.routes";
+import { leadershipOkrRoutes } from "./leadership-okr.routes";
 import { simerMapRoutes } from "./simer-map.routes";
 import { knownProblemRoutes } from "./known-problems.routes";
 import { intelligenceRoutes } from "./intelligence.routes";
+import { publicEnrichmentRoutes } from "./public-enrichment.routes";
+import { cooperativeNewsRoutes } from "./cooperative-news.routes";
+import { integrationDiagnosticsRoutes } from "./integration-diagnostics.routes";
 
 /* =========================================================
    ROUTER
@@ -98,6 +103,8 @@ routes.use(
   authRoutes,
 );
 
+routes.use("/api/public-news", cooperativeNewsRoutes);
+
 /* =========================================================
    ÁREA AUTENTICADA
 
@@ -116,9 +123,13 @@ routes.use("/api/system-settings", systemSettingsRoutes);
 routes.use("/api/sessions", sessionRoutes);
 routes.use("/api/chat", chatRoutes);
 routes.use("/api/coordination", coordinationRoutes);
+routes.use("/api/team-results/meetings", teamResultsMeetingRoutes);
+routes.use("/api/leadership/okrs", leadershipOkrRoutes);
 routes.use("/api/simer-map", simerMapRoutes);
 routes.use("/api/known-problems", knownProblemRoutes);
 routes.use("/api/intelligence", intelligenceRoutes);
+routes.use("/api/public-enrichment", publicEnrichmentRoutes);
+routes.use("/api/integration-diagnostics", integrationDiagnosticsRoutes);
 
 /* =========================================================
    ADMINISTRAÇÃO DE USUÁRIOS

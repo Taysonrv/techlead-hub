@@ -1,4 +1,7 @@
+import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { KpiGrid } from "../components/KpiGrid";
+import { FavoriteAction } from "../components/FavoriteAction";
+import { TeamDashboardCards } from "../components/TeamDashboardCards";
 import { HomeWorkspace } from "./HomeWorkspace";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -39,19 +42,21 @@ import {
 
 import { useColorMode } from "../context/ColorModeContext";
 
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { readFavorites, toggleFavorite } from "../utils/favorites";
 
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
-import { detailDrawerPaperSx } from "../theme/layoutTokens";
+import { analyticalPanelSx, detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { useFilters } from "../context/FiltersContext";
 import { aliareColors } from "../theme/theme";
 import { calculateTimestampSla } from "../utils/timestampSla";
-import { auditOperationalMetrics, buildOperationalCohorts } from "../utils/operationalMetrics";
+import { auditOperationalMetrics, buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 import { calculateServiceLevel } from "../utils/serviceLevel";
 import {
   chartPalette,
@@ -84,6 +89,7 @@ type AzureTaskSummary = {
 type Ticket = {
   id: number;
   movideskId: number;
+  ticketType?: number | null;
 
   protocol: string | null;
   subject: string;
@@ -124,6 +130,8 @@ type Ticket = {
 
   resolvedDate: string | null;
   closedDate: string | null;
+  canceledDate?: string | null;
+  reopenedDate?: string | null;
 
   lifetimeMinutes: number | null;
   stoppedMinutes: number | null;
@@ -209,10 +217,15 @@ type MetricInfoDefinition = {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const [favoriteCards, setFavoriteCards] = useState<string[]>([]);
+  useEffect(() => { if (user?.id != null) setFavoriteCards(readFavorites(user.id).filter((item) => item.kind === "card").map((item) => item.id)); }, [user?.id]);
   const { mode } = useColorMode();
   const isDark = mode === "dark";
   const chartGrid = isDark ? "rgba(148,163,184,.16)" : "#E4E7EC";
   const chartTick = isDark ? "#8EA4BC" : "#667085";
+  const closedFlowColor = isDark ? "#B9A0FF" : "#7657C7";
   const chartTooltipStyle = {
     background: isDark ? "rgba(7,23,39,.96)" : "#FFFFFF",
     border: `1px solid ${isDark ? "rgba(56,189,248,.24)" : "#E4E7EC"}`,
@@ -220,12 +233,39 @@ export function Dashboard() {
     boxShadow: isDark ? "0 14px 34px rgba(0,0,0,.38)" : "0 12px 28px rgba(16,24,40,.12)",
     color: isDark ? "#EAF4FF" : "#101828",
   };
+  const dashboardSurfaceSx = {
+    ...analyticalPanelSx,
+    borderRadius: { xs: 2.5, md: 3 },
+    borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+    background: isDark
+      ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+      : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+    boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
+    "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
+    "&:hover": { borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)", boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)" },
+  } as const;
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
 
   const [loading, setLoading] =
     useState(true);
+
+  useEffect(() => {
+    if (loading || !location.hash.startsWith("#kpi-")) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    let attempts = 0;
+    const scroll = () => {
+      const target = document.getElementById(id);
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+      if (++attempts < 12) window.setTimeout(scroll, 150);
+    };
+    const handle = window.setTimeout(scroll, 100);
+    return () => window.clearTimeout(handle);
+  }, [location.hash, loading]);
 
   const [error, setError] =
     useState<string | null>(null);
@@ -283,20 +323,8 @@ export function Dashboard() {
 
     void loadTickets(true);
     const unsubscribeRefresh = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
-    // Atualização a cada 60s, reutilizando o cache e impedindo overlap.
-    // Não efetuar chamadas enquanto a aba estiver oculta; a próxima leitura
-    // será realizada assim que a página voltar a ficar visível.
-    const refreshOnce = () => {
-      if (document.visibilityState !== "visible" || refreshing) return;
-      void loadTickets();
-    };
-    const intervalId = window.setInterval(refreshOnce, 60_000);
-    const onVisibilityChange = () => { if (document.visibilityState === "visible") refreshOnce(); };
-    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
       unsubscribeRefresh();
-      window.clearInterval(intervalId);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
       controller.abort();
     };
   }, []);
@@ -311,7 +339,7 @@ export function Dashboard() {
   }), [effectiveStartDate, effectiveEndDate]);
 
   const operationalCohorts = useMemo(
-    () => buildOperationalCohorts(tickets, periodBounds),
+    () => buildOperationalCohorts(tickets, periodBounds, "allImported"),
     [tickets, periodBounds],
   );
 
@@ -325,6 +353,7 @@ export function Dashboard() {
     [openedBySimerOperationInPeriod],
   );
   const pendingTickets = operationalCohorts.backlog;
+  const pendingInPeriod = operationalCohorts.pendingInPeriod;
   const resolvedInPeriod = operationalCohorts.resolved;
   const closedInPeriod = operationalCohorts.closed;
 
@@ -335,7 +364,6 @@ export function Dashboard() {
   const newTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "New"), [pendingTickets]);
   const attendanceTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "InAttendance"), [pendingTickets]);
   const stoppedTickets = useMemo(() => pendingTickets.filter((ticket) => ticket.baseStatus === "Stopped"), [pendingTickets]);
-  const criticalTickets = useMemo(() => pendingTickets.filter((ticket) => normalize(ticket.urgency) === "critica"), [pendingTickets]);
 
   const responseSla = useMemo(() => calculateTimestampSla(openedBySimerOperationInPeriod, "response"), [openedBySimerOperationInPeriod]);
 
@@ -361,13 +389,13 @@ export function Dashboard() {
     abertosOperacaoNoPeriodo: openedBySimerOperationInPeriod.length,
     abertosComSimerNoPeriodo: openedWithSimerInPeriod.length,
     pendentes: pendingTickets.length,
+    pendentesNoPeriodo: pendingInPeriod.length,
     resolvidosNoPeriodo: resolvedInPeriod.length,
     fechadosNoPeriodo: closedInPeriod.length,
     novos: newTickets.length,
     emAtendimento: attendanceTickets.length,
     parados: stoppedTickets.length,
-    criticos: criticalTickets.length,
-  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets, criticalTickets]);
+  }), [openedInPeriod, openedBySimerOperationInPeriod, openedWithSimerInPeriod, pendingTickets, pendingInPeriod, resolvedInPeriod, closedInPeriod, newTickets, attendanceTickets, stoppedTickets]);
 
   /* =======================================================
      DESENVOLVIMENTO / AZURE DEVOPS
@@ -952,34 +980,50 @@ export function Dashboard() {
   const cards = [
     {
       title: "Abertos no Período",
-      value: summary.abertosOperacaoNoPeriodo,
-      description: "Entradas do período atribuídas à operação SIMER",
+      value: summary.abertosNoPeriodo,
+      description: "Tickets abertos no período na base importada",
       severity: "default" as Severity,
       info: {
         title: "Abertos no Período",
-        summary: "Tickets abertos no período sob responsabilidade da operação SIMER.",
-        calculation: "createdDate no período + responsabilidade operacional SIMER.",
+        summary: "Tickets com data de abertura no período, independentemente do responsável atual.",
+        calculation: "createdDate no período, sem restringir pelo responsável atual.",
         source: "Movidesk",
-        reference: "Ticket.createdDate + Ticket.owner/ownerTeam",
+        reference: "Ticket.createdDate",
         periodRule: "Respeita integralmente o período global selecionado.",
       },
-      onClick: () => showTickets("Abertos no Período", openedBySimerOperationInPeriod, "Tickets abertos no período atribuídos à operação SIMER"),
+      onClick: () => showTickets("Abertos no Período", openedInPeriod, "Tickets abertos no período na base importada"),
+    },
+    {
+      title: "Pendentes no Período",
+      value: summary.pendentesNoPeriodo,
+      description: "Tickets públicos ainda pendentes, abertos no período selecionado",
+      severity: "warning" as Severity,
+      info: {
+        title: "Pendentes no Período",
+        summary: "Tickets públicos atualmente pendentes cuja abertura ocorreu dentro do período global.",
+        calculation: "ticketType = 2, baseStatus New/InAttendance/Stopped e createdDate dentro do período.",
+        source: "Movidesk",
+        reference: "Ticket.ticketType, Ticket.baseStatus e Ticket.createdDate",
+        periodRule: "Respeita o filtro global de período, inclusive datas personalizadas.",
+        notes: "Não representa o estoque histórico na data de encerramento do período; o backlog total permanece disponível em card separado. Tickets sem tipo confirmado não são presumidos públicos.",
+      },
+      onClick: () => showTickets("Pendentes no Período", pendingInPeriod, "Tickets públicos ainda pendentes, abertos no período selecionado"),
     },
     {
       title: "Backlog atual",
       value: summary.pendentes,
-      description: "Estoque atual de tickets ativos",
+      description: "Estoque atual de tickets públicos ativos",
       severity: "warning" as Severity,
       info: {
         title: "Backlog atual",
         summary: "Estoque atual de tickets ainda ativos, independentemente da data de abertura. Não equivale ao indicador histórico Pendentes no fim do período do Movidesk.",
-        calculation: "Contagem de tickets com baseStatus New, InAttendance ou Stopped.",
+        calculation: "Contagem de tickets públicos (ticketType = 2) com baseStatus New, InAttendance ou Stopped.",
         source: "Movidesk",
         reference: "Ticket.baseStatus",
         periodRule: "Não é limitado pela data de abertura, pois representa o backlog atual.",
         notes: "Clique para visualizar todos os tickets que permanecem ativos. Para períodos passados, o Hub não reconstrói artificialmente o estado histórico sem snapshot daquele dia.",
       },
-      onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets que permanecem ativos neste momento"),
+      onClick: () => showTickets("Backlog atual", pendingTickets, "Tickets públicos que permanecem ativos neste momento"),
     },
     {
       title: "Resolvidos",
@@ -989,7 +1033,7 @@ export function Dashboard() {
       info: {
         title: "Resolvidos",
         summary: "Tickets com resolução no período e status resolvido ou fechado, independentemente da data de abertura.",
-        calculation: "resolvedDate no período + status resolvido/fechado + escopo SIMER.",
+        calculation: "resolvedDate no período + status resolvido/fechado, sem filtro por responsável atual.",
         source: "Movidesk",
         reference: "Ticket.resolvedDate",
         periodRule: "Usa a data de resolução, e não a data de abertura.",
@@ -1004,8 +1048,8 @@ export function Dashboard() {
       severity: "success" as Severity,
       info: {
         title: "Fechados",
-        summary: "Tickets cuja data de fechamento está dentro do período selecionado.",
-        calculation: "Contagem dos tickets com closedDate dentro do período.",
+        summary: "Tickets fechados no período; atendimentos cancelados são excluídos.",
+        calculation: "Contagem dos tickets com closedDate dentro do período, excluindo cancelados.",
         source: "Movidesk",
         reference: "Ticket.closedDate",
         periodRule: "Usa a data de fechamento, e não a data de abertura.",
@@ -1062,36 +1106,6 @@ export function Dashboard() {
       },
       onClick: () => showTickets("Tickets com avaliação CSAT", filteredTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk"),
     },
-    {
-      title: "Críticos",
-      value: summary.criticos,
-      description: "Pendentes com urgência crítica",
-      severity: "error" as Severity,
-      info: {
-        title: "Críticos",
-        summary: "Tickets atualmente pendentes classificados com urgência crítica.",
-        calculation: "Ticket aberto e urgência normalizada igual a Crítica.",
-        source: "Movidesk",
-        reference: "Ticket.urgency + Ticket.baseStatus",
-        periodRule: "Representa o backlog atual, independentemente da abertura.",
-      },
-      onClick: () => showTickets("Tickets críticos", criticalTickets, "Prioridade imediata no backlog atual"),
-    },
-    {
-      title: "Parados",
-      value: summary.parados,
-      description: "Pendentes em situação de parada",
-      severity: "warning" as Severity,
-      info: {
-        title: "Parados",
-        summary: "Tickets atualmente em status de espera ou parada.",
-        calculation: "Contagem de tickets com baseStatus = Stopped.",
-        source: "Movidesk",
-        reference: "Ticket.baseStatus",
-        periodRule: "Representa o backlog atual.",
-      },
-      onClick: () => showTickets("Tickets parados", stoppedTickets, "Chamados atualmente parados"),
-    },
   ];
 
   /* =======================================================
@@ -1099,7 +1113,11 @@ export function Dashboard() {
   ======================================================= */
 
   if (loading) {
-    return <ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />;
+    return (
+      <Box sx={{ width: "100%", minWidth: 0, p: { xs: 1, sm: 2 } }}>
+        <ContentState kind="loading" title="Carregando visão executiva" description="Preparando indicadores, gráficos e análises da operação." minHeight={360} />
+      </Box>
+    );
   }
 
   if (error && tickets.length === 0) {
@@ -1115,16 +1133,18 @@ export function Dashboard() {
   ======================================================= */
 
   return (
-    <Box sx={{
+    <Box className="techlead-executive-dashboard" sx={{
       width: "100%",
       maxWidth: "100%",
       minWidth: 0,
       mx: 0,
       mt: 0,
       p: 0,
-      minHeight: "100vh",
+      minHeight: "100%",
       boxSizing: "border-box",
-      background: "transparent",
+      background: isDark
+        ? "radial-gradient(ellipse at 90% 0%, rgba(11,184,173,.065), transparent 44%)"
+        : "radial-gradient(ellipse at 90% 0%, rgba(23,129,229,.035), transparent 44%)",
       "& > *": {
         width: "100%",
         maxWidth: "100%",
@@ -1141,7 +1161,7 @@ export function Dashboard() {
       {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
       <PageHeader
         eyebrow="Operação"
-        title="Dashboard Executivo"
+        title="Dashboard"
         description="Visão consolidada da operação de suporte"
         meta={<>{periodLabel(period)}{" • "}{filteredTickets.length} ticket(s) analisado(s){lastLoadedAt>0&&` · Leitura do Hub às ${new Date(lastLoadedAt).toLocaleTimeString("pt-BR")}`}</>}
         action={<PeriodFilter />}
@@ -1152,8 +1172,120 @@ export function Dashboard() {
         </Alert>
       )}
 
+      {/* =================================================
+          KPIs
+      ================================================= */}
+
+      <Box sx={{ mt: { xs: 1.5, md: 2 }, mb: 1.25, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
+        <Box>
+          <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Visão em tempo real</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>Indicadores essenciais</Typography>
+        </Box>
+        <Chip label={`${cards.length} indicadores`} variant="outlined" size="small" />
+      </Box>
+      <KpiGrid className="techlead-dashboard-kpis" sx={{ mb: { xs: 2.5, md: 3.5 } }}>
+        {cards.map(
+          (card) => (
+            <Box key={card.title} id={"kpi-" + card.title} sx={{ position: "relative", minWidth: 0, scrollMarginTop: "100px" }}>
+            <KpiCard
+              key={card.title}
+              title={
+                card.title
+              }
+              value={
+                card.value
+              }
+              description={
+                card.description
+              }
+              severity={
+                card.severity
+              }
+              info={
+                card.info
+              }
+              onClick={card.onClick}
+              favorite={favoriteCards.includes("card:" + card.title)}
+              onToggleFavorite={() => { if (user?.id == null) return; const next = toggleFavorite(user.id, { id: "card:" + card.title, label: card.title, path: "/visao-operacional#kpi-" + encodeURIComponent(card.title), kind: "card" }); setFavoriteCards(next.filter((item) => item.kind === "card").map((item) => item.id)); }}
+            />
+            </Box>
+          )
+        )}
+      </KpiGrid>
+
+      <TeamDashboardCards tickets={tickets} period={periodBounds} isDark={isDark} onOpenTickets={(title, ids, subtitle) => { const selectedIds = new Set(ids); showTickets(title, tickets.filter((ticket) => selectedIds.has(ticket.movideskId)), subtitle); }} />
+
+      {/* EVOLUÇÃO DE TICKETS — DESTAQUE EXECUTIVO */}
+      {filteredTickets.length > 0 && (
+        <Box component="section" aria-label="Evolução dos tickets" sx={{ mb: { xs: 2.5, md: 3.5 }, minWidth: 0 }}>
+          <Typography variant="overline" sx={{ fontWeight: 850, color: "primary.main", letterSpacing: ".1em" }}>Tendência operacional</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 850, mb: 1.5, letterSpacing: "-.025em" }}>Evolução dos tickets</Typography>
+          <Box className="techlead-dashboard-featured" sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 2, alignItems: "stretch" }}>
+            <CardBase>
+              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" }, gap: 1 }}>
+                <Box sx={{ textAlign: "left" }}>
+                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
+                    Abertos × Resolvidos × Fechados
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Fluxo diário da Operação SIMER • entrada, resolução e fechamento no período
+                  </Typography>
+                </Box>
+              </Stack>
+              <Box sx={{ height: { xs: 260, sm: 300, md: 340 }, mt: 1.5, minWidth: 0 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
+                      </linearGradient>
+                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
+                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
+                      </linearGradient>
+                      <linearGradient id="closedFlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={closedFlowColor} stopOpacity={0.24} />
+                        <stop offset="95%" stopColor={closedFlowColor} stopOpacity={0.015} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
+                    <Tooltip contentStyle={chartTooltipStyle} />
+                    {!flowHidden.has("opened") && (
+                      <Area type="linear" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
+                    )}
+                    {!flowHidden.has("resolved") && (
+                      <Area type="linear" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
+                    )}
+                    {!flowHidden.has("closed") && (
+                      <Area type="linear" dataKey="closed" name="Fechados" stroke={closedFlowColor} strokeWidth={2.8} fill="url(#closedFlow)" activeDot={{ r: 6, fill: closedFlowColor, stroke: isDark ? "#0A192A" : "#FFFFFF", strokeWidth: 2, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
+                    )}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: .5, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
+                {([
+                  ["opened","Abertos",semanticChartColors.normal],
+                  ["resolved","Resolvidos",semanticChartColors.positive],
+                  ["closed","Fechados",closedFlowColor],
+                ] as const).map(([key,label,color]) => {
+                  const active = !flowHidden.has(key);
+                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={label}
+                    icon={<Box component="span" sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: active ? color : "text.disabled", display: "inline-block" }} />}
+                    onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
+                    sx={{ color: active ? color : "text.disabled", borderColor: active ? `${color}70` : "divider", bgcolor: active ? `${color}18` : "transparent", fontWeight: 800, opacity: active ? 1 : .58, "&:hover": { bgcolor: active ? `${color}28` : "action.hover" }, "& .MuiChip-icon": { ml: 1 } }} />;
+                })}
+              </Stack>
+            </CardBase>
+          </Box>
+
+        </Box>
+      )}
+
       {/* ATALHOS PARA A OPERAÇÃO / ANÁLISE ASSISTIDA */}
-      <Card variant="outlined" sx={{ borderRadius: 2.5, mb: 2.25, bgcolor: "background.paper" }}>
+      <Card variant="outlined" sx={{ ...dashboardSurfaceSx, mb: { xs: 2.5, md: 3 } }}>
         <CardContent sx={{ p: { xs: 1.75, md: 2.25 }, "&:last-child": { pb: 2.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" }, mb: 1.5 }}>
             <Box>
@@ -1162,7 +1294,7 @@ export function Dashboard() {
             </Box>
             <Button variant="contained" onClick={() => navigate("/analise-atendimento")}>Analisar atendimento</Button>
           </Stack>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", sm: "repeat(3,minmax(0,1fr))", lg: "repeat(4,minmax(0,1fr))", xl: "repeat(5,minmax(0,1fr))" }, gap: 1 }}>
             {[
               ["Tickets", "/operacao/tickets"], ["Minha Operação", "/operacao/minha-operacao"],
               ["Pendências & Riscos", "/pendencias-riscos"], ["Qualidade de Dados", "/pendencias-riscos/qualidade"],
@@ -1181,42 +1313,10 @@ export function Dashboard() {
           </Box>
         </CardContent>
       </Card>
-      <Box sx={{ mb: 2.25 }}>
-        <Typography sx={{ fontWeight: 850, mb: 1 }}>Sua operação agora</Typography>
+      <Box component="section" aria-label="Sua operação agora" sx={{ mb: { xs: 2.5, md: 3 }, minWidth: 0 }}>
+        <Typography variant="h6" sx={{ fontWeight: 850, mb: 1.5, letterSpacing: "-.025em" }}>Sua operação agora</Typography>
         <HomeWorkspace embedded />
       </Box>
-
-      {/* =================================================
-          KPIs
-      ================================================= */}
-
-      <KpiGrid sx={{mb: 2.5}}>
-        {cards.map(
-          (card) => (
-            <KpiCard
-              key={card.title}
-              title={
-                card.title
-              }
-              value={
-                card.value
-              }
-              description={
-                card.description
-              }
-              severity={
-                card.severity
-              }
-              info={
-                card.info
-              }
-              onClick={
-                card.onClick
-              }
-            />
-          )
-        )}
-      </KpiGrid>
 
       {/* =================================================
           DESENVOLVIMENTO / AZURE DEVOPS
@@ -1225,10 +1325,8 @@ export function Dashboard() {
       <Card
         elevation={0}
         sx={{
+          ...dashboardSurfaceSx,
           mb: 2.5,
-          border: "1px solid",
-          borderColor: "divider",
-          borderRadius: 2,
         }}
       >
         <CardContent>
@@ -1426,16 +1524,21 @@ export function Dashboard() {
       {filteredTickets.length >
         0 && (
         <>
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="overline" sx={{ color: "primary.main", fontWeight: 850, letterSpacing: ".1em" }}>Distribuição e prioridades</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 850, letterSpacing: "-.025em" }}>Análise do período</Typography>
+          </Box>
           {/* =============================================
               VISÃO ANALÍTICA PRINCIPAL
           ============================================== */}
 
           <Box
+            className="techlead-dashboard-analysis-grid"
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" },
-              gap: 2,
-              mb: 2,
+              gap: { xs: 1.5, md: 2.5 },
+              mb: 2.5,
             }}
           >
             <DonutAnalysisCard
@@ -1466,63 +1569,7 @@ export function Dashboard() {
               EVOLUÇÃO MENSAL POR CATEGORIA
           ============================================== */}
 
-          <Box sx={{ my: 2 }}>
-            <CardBase>
-              <Stack direction={{ xs: "column", sm: "row" }} sx={{ justifyContent: "center", alignItems: "center", gap: 1 }}>
-                <Box sx={{ textAlign: "center" }}>
-                  <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
-                    Abertos × Resolvidos × Fechados
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Fluxo diário da Operação SIMER • entrada, resolução e fechamento no período
-                  </Typography>
-                </Box>
-              </Stack>
-              <Box sx={{ height: { xs: 225, md: 250 }, mt: 1.25 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyFlow} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                    <defs>
-                      <linearGradient id="openedFlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={semanticChartColors.normal} stopOpacity={0.24} />
-                        <stop offset="95%" stopColor={semanticChartColors.normal} stopOpacity={0.01} />
-                      </linearGradient>
-                      <linearGradient id="resolvedFlow" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={semanticChartColors.positive} stopOpacity={0.20} />
-                        <stop offset="95%" stopColor={semanticChartColors.positive} stopOpacity={0.01} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartGrid} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} minTickGap={24} interval="preserveStartEnd" tickMargin={8} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={42} />
-                    <Tooltip contentStyle={chartTooltipStyle} />
-                    {!flowHidden.has("opened") && (
-                      <Area type="monotone" dataKey="opened" name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.4} fill="url(#openedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Abertos em ${formatShortDate(day)}`, openedInPeriod.filter((ticket) => formatIsoDate(new Date(ticket.createdDate)) === day), "Tickets abertos no dia selecionado"); } }} />
-                    )}
-                    {!flowHidden.has("resolved") && (
-                      <Area type="monotone" dataKey="resolved" name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.4} fill="url(#resolvedFlow)" activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Resolvidos em ${formatShortDate(day)}`, resolvedInPeriod.filter((ticket) => Boolean(ticket.resolvedDate) && formatIsoDate(new Date(ticket.resolvedDate!)) === day), "Tickets resolvidos no dia selecionado"); } }} />
-                    )}
-                    {!flowHidden.has("closed") && (
-                      <Area type="monotone" dataKey="closed" name="Fechados" stroke={semanticChartColors.neutral} strokeWidth={2.2} fillOpacity={0} activeDot={{ r: 6, cursor: "pointer", onClick: (_event, payload: any) => { const day = payload?.payload?.sortDate; if (day) showTickets(`Fechados em ${formatShortDate(day)}`, closedInPeriod.filter((ticket) => Boolean(ticket.closedDate) && formatIsoDate(new Date(ticket.closedDate!)) === day), "Tickets fechados no dia selecionado"); } }} />
-                    )}
-                  </AreaChart>
-                </ResponsiveContainer>
-              </Box>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ mt: .5, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}>
-                {([
-                  ["opened","Abertos",semanticChartColors.normal],
-                  ["resolved","Resolvidos",semanticChartColors.positive],
-                  ["closed","Fechados",semanticChartColors.neutral],
-                ] as const).map(([key,label,color]) => {
-                  const active = !flowHidden.has(key);
-                  return <Chip key={key} size="small" clickable variant={active ? "filled" : "outlined"} label={`● ${label}`}
-                    onClick={() => setFlowHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else if (current.size < 2) next.add(key); return next; })}
-                    sx={{ color: active ? color : "text.disabled", fontWeight: 800, opacity: active ? 1 : .55 }} />;
-                })}
-              </Stack>
-            </CardBase>
-          </Box>
-
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 2, mb: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" }, gap: 2, mb: 2 }}>
             <CardBase>
               <Box sx={{ textAlign: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>
                 Principais causas
@@ -1573,7 +1620,7 @@ export function Dashboard() {
             />
           </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" }, gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(2, minmax(0, 1fr))" }, gap: 1.5 }}>
             <OperationalRankingCard
               title="Áreas de negócio"
               subtitle={`Área de negócio informada no Movidesk • cobertura ${businessAreaCoverage.filled}/${businessAreaCoverage.total} • sem fallback para Serviço`}
@@ -1619,6 +1666,7 @@ export function Dashboard() {
           <Card
             elevation={0}
             sx={{
+              ...dashboardSurfaceSx,
               border:
                 "1px solid",
 
@@ -1628,8 +1676,6 @@ export function Dashboard() {
                   ? "error.light"
                   : "divider",
 
-              borderRadius:
-                2.5,
             }}
           >
             <CardContent
@@ -1987,7 +2033,7 @@ export function Dashboard() {
           DRAWER - TASKS DE DESENVOLVIMENTO
       ================================================= */}
       <Drawer anchor="right" open={Boolean(developmentDrilldown)} onClose={() => setDevelopmentDrilldown(null)} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>
-        <Box sx={{ width: { xs: "100vw", sm: 560 }, maxWidth: "100vw", p: 2.5 }}>
+        <Box sx={{ width: "100%", minWidth: 0, boxSizing: "border-box", p: 2.5 }}>
           {developmentDrilldown && <>
             <Stack direction="row" sx={{justifyContent:"space-between",alignItems:"flex-start",gap:2}}>
               <Box><Typography variant="h6" sx={{fontWeight:800}}>{developmentDrilldown.title}</Typography><Typography variant="body2" color="text.secondary">{developmentDrilldown.subtitle}</Typography></Box>
@@ -2035,10 +2081,9 @@ export function Dashboard() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
@@ -2135,161 +2180,7 @@ export function Dashboard() {
                 </Alert>
               )}
 
-              {drilldown.tickets.map(
-                (ticket) => (
-                  <Box
-                    key={
-                      ticket.id
-                    }
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      setSelectedTicket(
-                        ticket
-                      )
-                    }
-                    onKeyDown={(
-                      event
-                    ) => {
-                      if (
-                        event.key ===
-                          "Enter" ||
-                        event.key ===
-                          " "
-                      ) {
-                        setSelectedTicket(
-                          ticket
-                        );
-                      }
-                    }}
-                    sx={{
-                      py: 1.5,
-
-                      borderBottom:
-                        "1px solid",
-
-                      borderColor:
-                        "divider",
-
-                      cursor:
-                        "pointer",
-
-                      "&:hover": {
-                        backgroundColor:
-                          "action.hover",
-                      },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{
-                        justifyContent:
-                          "space-between",
-                        alignItems:
-                          "flex-start",
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          minWidth:
-                            0,
-                        }}
-                      >
-                        <Stack
-                          direction="row"
-                          spacing={0.5}
-                          sx={{
-                            alignItems:
-                              "center",
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                          sx={{ fontWeight: 800 }}
-                          >
-                            #
-                            {
-                              ticket.movideskId
-                            }
-                          </Typography>
-
-                          <IconButton
-                            size="small"
-                            title="Copiar número do ticket"
-                            onClick={(
-                              event
-                            ) => {
-                              event.stopPropagation();
-
-                              void copyTicketNumber(
-                                ticket
-                              );
-                            }}
-                            sx={{
-                              width: 24,
-                              height: 24,
-                              fontSize:
-                                "0.75rem",
-                            }}
-                          >
-                            ⧉
-                          </IconButton>
-
-                          <IconButton
-                            size="small"
-                            title="Abrir no Movidesk"
-                            aria-label={`Abrir ticket ${ticket.movideskId} no Movidesk`}
-                            onClick={(
-                              event
-                            ) => {
-                              event.stopPropagation();
-
-                              openMovideskTicket(
-                                ticket
-                              );
-                            }}
-                            sx={{
-                              width: 24,
-                              height: 24,
-                              fontSize:
-                                "0.8rem",
-                            }}
-                          >
-                            ↗
-                          </IconButton>
-                        </Stack>
-
-                        <Typography
-                          variant="body2"
-                        sx={{ fontWeight: 600 }}
-                        >
-                          {
-                            ticket.subject
-                          }
-                        </Typography>
-
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                        >
-                          {ticket.client ??
-                            "Sem cliente"}
-                          {" • "}
-                          {ticket.owner ??
-                            "Sem responsável"}
-                        </Typography>
-                      </Box>
-
-                      <StatusChip
-                        ticket={
-                          ticket
-                        }
-                      />
-                    </Stack>
-                  </Box>
-                )
-              )}
+              <TicketDrilldownExplorer key={drilldown.title} tickets={drilldown.tickets} onSelect={(ticket)=>setSelectedTicket(ticket)} onOpen={(ticket)=>openMovideskTicket(ticket)} />
             </>
           )}
         </Box>
@@ -2313,10 +2204,9 @@ export function Dashboard() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
@@ -2745,6 +2635,8 @@ function KpiCard({
   info,
   severity,
   onClick,
+  favorite,
+  onToggleFavorite,
 }: {
   title: string;
   value: ReactNode;
@@ -2752,6 +2644,8 @@ function KpiCard({
   info: MetricInfoDefinition;
   severity: Severity;
   onClick: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   const accentColor =
     severity === "error"
@@ -2770,6 +2664,8 @@ function KpiCard({
       info={info}
       accentColor={accentColor}
       onClick={onClick}
+      favorite={favorite}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }
@@ -2781,6 +2677,8 @@ function StandardMetricCard({
   info,
   accentColor,
   onClick,
+  favorite,
+  onToggleFavorite,
 }: {
   title: string;
   value: ReactNode;
@@ -2788,6 +2686,8 @@ function StandardMetricCard({
   info: MetricInfoDefinition;
   accentColor: string;
   onClick?: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 }) {
   return (
     <ExecutiveKpiCard
@@ -2797,6 +2697,8 @@ function StandardMetricCard({
       info={`${info.summary} • ${info.periodRule}`}
       accent={accentColor}
       onClick={onClick}
+      favorite={favorite}
+      onToggleFavorite={onToggleFavorite}
     />
   );
 }
@@ -2819,37 +2721,27 @@ function CardBase({
     <Card
       elevation={0}
       sx={{
-        border:
-          "1px solid",
-
-        borderColor: isDark ? "rgba(77,153,210,.24)" : "divider",
-
-        borderRadius: 3,
-
+        ...analyticalPanelSx,
+        border: "1px solid",
+        borderColor: isDark ? "rgba(80,157,190,.22)" : "rgba(30,96,130,.13)",
+        borderRadius: { xs: 2.5, md: 3 },
         background: isDark
-          ? "linear-gradient(145deg, rgba(11,35,56,.98), rgba(7,25,43,.98))"
-          : "background.paper",
-
-        boxShadow: isDark
-          ? "0 16px 38px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)"
-          : "0 4px 18px rgba(16,24,40,.055)",
-
-        overflow: "hidden",
-        height: "100%",
+          ? "radial-gradient(ellipse at 100% 0%, rgba(32,173,197,.10), transparent 38%), linear-gradient(145deg, #0D2236 0%, #0A192A 100%)"
+          : "radial-gradient(ellipse at 100% 0%, rgba(35,173,191,.07), transparent 38%), linear-gradient(145deg, #FFFFFF 0%, #F5FAFC 100%)",
+        boxShadow: isDark ? "0 16px 40px rgba(0,0,0,.17), inset 0 1px 0 rgba(255,255,255,.025)" : "0 14px 34px rgba(21,54,76,.055), inset 0 1px 0 rgba(255,255,255,.8)",
         transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease",
+        "&:before": { content: '""', position: "absolute", inset: "0 0 auto", height: 2, background: "linear-gradient(90deg, transparent, rgba(42,205,201,.8), rgba(56,189,248,.65), transparent)", opacity: isDark ? .72 : .48 },
         "&:hover": {
-          borderColor: isDark ? "rgba(47,208,255,.34)" : "rgba(24,199,122,.32)",
-          boxShadow: isDark ? "0 18px 44px rgba(0,0,0,.26)" : "0 8px 24px rgba(16,24,40,.08)",
+          borderColor: isDark ? "rgba(56,189,248,.34)" : "rgba(30,140,166,.26)",
+          transform: "translateY(-1px)",
+          boxShadow: isDark ? "0 20px 48px rgba(0,0,0,.22)" : "0 18px 40px rgba(21,54,76,.08)",
         },
       }}
     >
       <CardContent
         sx={{
-          p: 2,
-
-          "&:last-child": {
-            pb: 2,
-          },
+          p: { xs: 1.75, sm: 2.25 },
+          "&:last-child": { pb: { xs: 1.75, sm: 2.25 } },
         }}
       >
         {children}
@@ -2859,14 +2751,15 @@ function CardBase({
 }
 
 function CardPeriodHeader({ title, subtitle, value, onChange }: { title: string; subtitle: string; value?: CardPeriod; onChange?: (value: CardPeriod) => void }) {
-  return <Box sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
+  return <Box id={"section-" + encodeURIComponent(title)} sx={{ display: "grid", gridTemplateRows: "auto auto", justifyItems: "center", gap: .75, minHeight: value ? 76 : "auto" }}>
     <Box sx={{ textAlign: "center", minWidth: 0 }}>
       <Typography sx={{ fontWeight: 850, fontSize: "1.05rem", lineHeight: 1.25 }}>{title}</Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .35 }}>{subtitle}</Typography>
     </Box>
+    <FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} />
     {value && onChange && <FormControl size="small" sx={{ width: { xs: "100%", sm: 152 }, maxWidth: "100%", minWidth: 0 }}>
-      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ height: 32, fontSize: ".75rem", fontWeight: 750, textAlign: "center" }}>
-        <MenuItem value="7d">7 dias</MenuItem><MenuItem value="30d">30 dias</MenuItem><MenuItem value="60d">60 dias</MenuItem><MenuItem value="90d">90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
+      <Select inputProps={{ "aria-label": `Período de ${title}` }} value={value} onChange={(event) => onChange(event.target.value as CardPeriod)} sx={{ minHeight: 40, borderRadius: "8px", bgcolor: "background.paper", fontSize: ".875rem", fontWeight: 650, "& .MuiSelect-select": { py: 1.05, px: 1.4, pr: "36px !important", display: "flex", alignItems: "center" } }}>
+        <MenuItem value="7d">Últimos 7 dias</MenuItem><MenuItem value="30d">Últimos 30 dias</MenuItem><MenuItem value="60d">Últimos 60 dias</MenuItem><MenuItem value="90d">Últimos 90 dias</MenuItem><MenuItem value="month">Este mês</MenuItem><MenuItem value="semester">Este semestre</MenuItem><MenuItem value="year">Este ano</MenuItem>
       </Select>
     </FormControl>}
   </Box>;
@@ -2886,21 +2779,20 @@ function OperationalRankingCard({
   onItemClick: (label: string) => void;
 }) {
   const theme = useTheme();
-  const dark = theme.palette.mode === "dark";
   return (
     <CardBase>
-      <Box sx={{ textAlign: "center" }}>
-        <Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography>
+      <Box id={"section-" + encodeURIComponent(title)} sx={{ textAlign: "center" }}>
+        <Stack direction="row" spacing={.5} sx={{ justifyContent: "center", alignItems: "center" }}><Typography sx={{ fontWeight: 850, fontSize: "1.05rem" }}>{title}</Typography><FavoriteAction title={title} targetId={"section-" + encodeURIComponent(title)} /></Stack>
         <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
       </Box>
       {data.length ? (
-        <Box sx={{ height: Math.max(250, Math.min(330, data.length * 44 + 64)), mt: 1.25 }}>
+        <Box sx={{ height: Math.max(250, Math.min(330, data.length * 44 + 64)), mt: 1.25, minWidth: 0 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data} layout="vertical" margin={{ left: 10, right: 34, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={dark ? "rgba(148,163,184,.16)" : "#E4E7EC"} />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={false} />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={theme.palette.divider} />
+              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={150} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={false} contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary, border: `1px solid ${theme.palette.divider}`, borderRadius: 10 }} />
               <Bar dataKey="total" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} barSize={18} cursor="pointer" minPointSize={3}
                 onClick={(_, index) => {
                   const item = data[index];
@@ -3321,14 +3213,7 @@ function slaSeverity(summary: { percentage: number | null }): Severity {
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =========================================================

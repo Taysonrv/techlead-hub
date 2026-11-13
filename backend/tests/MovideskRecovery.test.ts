@@ -69,7 +69,10 @@ test("reconciliação importa apenas clientes SIMER; erros não confirmam janela
   const stamp = "2026-10-09T17:00:00.000Z";
   t.mock.method(service as any, "getPage", async (_skip: number, _since: Date, cursor: any) => {
     calls += 1;
-    if (calls === 2) { assert.equal(cursor, null); return []; }
+    if (calls === 2) {
+      assert.deepEqual(cursor, { id: 50, lastUpdate: stamp });
+      return [];
+    }
     return Array.from({ length: 50 }, (_, i) => ({ id: i + 1, lastUpdate: stamp, clients: [{ organization: { businessName: i === 0 ? "CLIENTE EXTERNO" : "COAP - SORRISO-MT" } }] }));
   });
   t.mock.method(MovideskJsonImportService.prototype, "execute", async (buffer: Buffer) => {

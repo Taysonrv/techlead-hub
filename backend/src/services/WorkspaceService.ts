@@ -262,6 +262,7 @@ export class WorkspaceService {
     user?: string | null;
     issue?: string | null;
     search?: string | null;
+    exportAll?: boolean;
   } = {}) {
     return new DataQualityService().analyze(params);
   }

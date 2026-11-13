@@ -6,6 +6,7 @@ import {
 import { MovideskExcelImportService } from "../services/MovideskExcelImportService";
 import { MovideskJsonImportService } from "../services/MovideskJsonImportService";
 import { ImportPreviewService } from "../services/ImportPreviewService";
+import { validateImportFile } from "../utils/importFileValidation";
 
 import type {
   AuthenticatedRequest,
@@ -30,6 +31,7 @@ export class ImportController {
         return res.status(400).json({ error: "Nenhum arquivo do Movidesk foi enviado." });
       }
 
+      validateImportFile(req.file);
       return res.json(await previewService.inspect(req.file));
     } catch (error) {
       return res.status(400).json({
@@ -52,27 +54,18 @@ export class ImportController {
           });
       }
 
-      const fileName =
-        req.file.originalname.toLowerCase();
-      const isExcel =
-        fileName.endsWith(".xlsx");
-      const isJson =
-        fileName.endsWith(".json");
-
-      if (!isExcel && !isJson) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Formato inválido. Envie um arquivo .xlsx ou .json do Movidesk.",
-          });
+      let format: "json" | "xlsx";
+      try {
+        format = validateImportFile(req.file);
+      } catch (validationError) {
+        return res.status(400).json({ error: validationError instanceof Error ? validationError.message : "Arquivo inválido." });
       }
 
       const authenticatedRequest =
         req as AuthenticatedRequest;
 
       const importer =
-        isJson
+        format === "json"
           ? jsonService
           : excelService;
 

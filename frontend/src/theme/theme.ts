@@ -95,7 +95,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
       text: { primary: text, secondary: textSecondary },
       divider: border,
     },
-    shape: { borderRadius: 6 },
+    shape: { borderRadius: 10 },
     typography: {
       fontFamily: ["Inter", "Segoe UI", "Roboto", "Arial", "sans-serif"].join(","),
       h1: { fontWeight: 800 }, h2: { fontWeight: 800 },
@@ -139,11 +139,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
           root: {
             position: "relative",
             border: `1px solid ${border}`,
-            boxShadow: dark ? "0 16px 42px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.025)" : "0 8px 24px rgba(15,23,42,.055)",
-            borderRadius: 12,
+            boxShadow: dark ? "0 6px 20px rgba(0,0,0,.12)" : "0 3px 14px rgba(16,24,40,.045)",
+            borderRadius: 16,
             overflow: "hidden",
-            backdropFilter: dark ? "blur(16px)" : undefined,
-            background: dark ? "linear-gradient(145deg, rgba(10,35,45,.94), rgba(7,27,39,.97))" : "linear-gradient(180deg,#FFFFFF,#FBFCFD)",
+            backdropFilter: undefined,
+            background: paper,
             backgroundColor: paper,
             transition: "border-color .18s ease, box-shadow .18s ease, transform .18s ease, background-color .18s ease",
             "&::after": dark ? { content: '""', position: "absolute", inset: "0 0 auto", height: 1, background: "linear-gradient(90deg, rgba(24,199,122,.30), rgba(47,141,255,.16), transparent 72%)", pointerEvents: "none" } : undefined,
@@ -222,8 +222,8 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { disableElevation: true, size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 7,
-            minHeight: 36,
+            borderRadius: 10,
+            minHeight: 38,
             fontSize: ".88rem",
             textTransform: "none",
             fontWeight: 700,
@@ -316,7 +316,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         defaultProps: { size: "small" },
         styleOverrides: {
           root: {
-            borderRadius: 7,
+            borderRadius: "var(--hub-radius-sm)",
             minHeight: 25,
             fontWeight: 700,
             fontSize: ".78rem",
@@ -334,7 +334,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
             position: "sticky",
             top: 0,
             zIndex: 1,
-            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".74rem", letterSpacing: ".03em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
+            "& .MuiTableCell-head": { color: "#FFFFFF", fontWeight: 750, fontSize: ".76rem", letterSpacing: ".045em", textTransform: "uppercase", borderBottomColor: dark ? "rgba(116,166,216,.18)" : aliareColors.graphite, position: "sticky", top: 0, zIndex: 2 },
           },
         },
       },
@@ -345,8 +345,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
             "&::-webkit-scrollbar": { height: 9, width: 9 },
             "&::-webkit-scrollbar-track": { background: dark ? "#091827" : "#EEF1F3" },
             "&::-webkit-scrollbar-thumb": { background: dark ? "#31516E" : "#C7CDD3", borderRadius: 99 },
-            borderRadius: 10,
+            borderRadius: "var(--hub-radius-md)",
             border: `1px solid ${border}`,
+            maxWidth: "100%",
             overflowX: "auto",
             overscrollBehaviorX: "contain",
             ...(dark && { background: "linear-gradient(145deg,rgba(9,34,44,.94),rgba(6,25,36,.97))", boxShadow: "inset 0 1px rgba(255,255,255,.025), 0 12px 28px rgba(0,0,0,.10)" }),
@@ -357,8 +358,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: {
           root: {
             borderBottomColor: border,
-            padding: "9px 12px",
-            fontSize: ".84rem",
+            fontVariantNumeric: "tabular-nums",
+            padding: "11px 16px",
+            fontSize: ".85rem",
             lineHeight: 1.4,
             ...(dark && { color: "#DCE9F7" }),
           },
@@ -367,8 +369,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
       MuiTableRow: {
         styleOverrides: {
           root: {
+            transition: "background-color var(--hub-motion-fast) ease",
             "&:nth-of-type(even)": { backgroundColor: dark ? "rgba(112,160,207,.035)" : "rgba(15,23,42,.018)" },
-            "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.055)" },
+            "&:hover": { backgroundColor: dark ? "rgba(24,199,122,.075)" : "rgba(24,199,122,.045)" },
             ...(dark && { transition: "background-color .14s ease, box-shadow .14s ease", "&:hover td:first-of-type": { boxShadow: "inset 2px 0 #18C77A" } }),
           },
         },
@@ -388,7 +391,7 @@ export function createAppTheme(mode: PaletteMode = "light") {
         styleOverrides: { root: { fontWeight: 850, letterSpacing: "-.012em" } },
       },
       MuiDialogContent: {
-        styleOverrides: { root: { scrollbarGutter: "stable" } },
+        styleOverrides: { root: { scrollbarGutter: "stable", minWidth: 0, overflowWrap: "anywhere" } },
       },
       MuiAlert: {
         styleOverrides: {
@@ -429,7 +432,9 @@ export function createAppTheme(mode: PaletteMode = "light") {
           },
         },
       },
-      MuiSvgIcon: { styleOverrides: { root: { transition: "transform .16s ease, filter .16s ease", filter: dark ? "drop-shadow(0 2px 5px rgba(0,0,0,.18))" : "drop-shadow(0 1px 1px rgba(15,23,42,.08))" } } },
+      // Ícones devem permanecer nítidos e discretos; sombras globais borravam
+      // ações pequenas e criavam peso visual diferente entre os temas.
+      MuiSvgIcon: { styleOverrides: { root: { flexShrink: 0, transition: "color .14s ease, opacity .14s ease" } } },
       MuiTooltip: { defaultProps: { arrow: true, enterDelay: 350 }, styleOverrides: { tooltip: { backgroundColor: dark ? "#162D43" : aliareColors.graphite, fontSize: ".76rem", lineHeight: 1.45, padding: "7px 10px", borderRadius: 8, border: dark ? "1px solid rgba(116,166,216,.20)" : undefined, boxShadow: dark ? "0 10px 28px rgba(0,0,0,.32)" : "0 8px 22px rgba(15,23,42,.14)" } } },
       MuiTabs: {
         styleOverrides: {
@@ -533,8 +538,11 @@ export function createAppTheme(mode: PaletteMode = "light") {
           paper: {
             border: `1px solid ${border}`,
             borderRadius: 14,
-            background: dark ? "linear-gradient(145deg,#0E2338,#0A192B)" : undefined,
-            boxShadow: dark ? "0 28px 80px rgba(0,0,0,.42)" : "0 24px 64px rgba(16,24,40,.18)",
+            background: paper,
+            color: text,
+            maxWidth: "calc(100vw - 24px)",
+            maxHeight: "calc(100dvh - 24px)",
+            boxShadow: dark ? "0 22px 64px rgba(0,0,0,.34)" : "0 20px 56px rgba(16,24,40,.16)",
           },
         },
       },

@@ -45,10 +45,13 @@ type UpdateStateListener = (
 
 type ConfigurationInput = {
   databaseUrl: string;
+  systemConfigKey?: string;
   organization: string;
   project: string;
   wiki: string;
   pat: string;
+  movideskToken?: string;
+  movideskUrl?: string;
   smtpHost?: string;
   smtpPort?: string;
   smtpSecure?: string;
@@ -91,19 +94,27 @@ const techLeadHubApi = {
     get: async () =>
       ipcRenderer.invoke("configuration:get"),
 
+    diagnoseDatabase: async (databaseUrl: string): Promise<{ ok: boolean; message: string }> =>
+      ipcRenderer.invoke("configuration:diagnose-database", databaseUrl),
+
     importEnv: async (): Promise<ConfigurationInput | null> =>
       ipcRenderer.invoke("configuration:import-env"),
 
     save: async (input: ConfigurationInput) =>
       ipcRenderer.invoke("configuration:save", input),
 
-    recoverKey: async (candidate: string): Promise<{ saved: boolean }> =>
-      ipcRenderer.invoke("configuration:recover-key", candidate),
+    recoverKey: async (candidate: string, legacyRekey = false): Promise<{ saved: boolean }> =>
+      ipcRenderer.invoke("configuration:recover-key", { candidate, legacyRekey }),
   },
 
   startup: {
     get: async (): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:get"),
     set: async (enabled: boolean): Promise<{ enabled: boolean }> => ipcRenderer.invoke("startup:set", enabled),
+  },
+
+  notifications: {
+    show: async (notification: { key: string; title: string; body: string; silent: boolean }): Promise<boolean> =>
+      ipcRenderer.invoke("notifications:show", notification),
   },
 
   /* =======================================================

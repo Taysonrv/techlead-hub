@@ -1,4 +1,4 @@
-import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
+import { scopedTicketWhere, scopedAzureWhere, movideskDashboardScope } from "../domain/OperationalScope";
 import type {
   Request,
   Response,
@@ -78,13 +78,15 @@ export class DashboardController {
        * Resolvidos -> resolvedDate
        * Fechados   -> closedDate
        *
-       * "Pendentes" é estoque operacional atual e não deve ser
-       * confundido com "Abertos no período".
+       * "Pendentes" considera tickets públicos atualmente abertos,
+       * cuja criação ocorreu no período. "Backlog atual" é o estoque
+       * público independentemente da data de abertura.
        */
       const [
         totalTickets,
         abertos,
         pendentes,
+        backlogAtual,
         novos,
         emAtendimento,
         parados,
@@ -93,70 +95,84 @@ export class DashboardController {
         criticos,
       ] = await Promise.all([
         prisma.ticket.count({
-          where: scopedTicketWhere(snapshotWhere),
+          where: dashboardWhere(snapshotWhere),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
             ...createdDateWhere,
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
-            baseStatus: {
-              in: [
-                "New",
-                "InAttendance",
-                "Stopped",
-              ],
-            },
+            ticketType: 2,
+            ...createdDateWhere,
+            baseStatus: { in: ["New", "InAttendance", "Stopped"] },
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
+            baseStatus: { in: ["New", "InAttendance", "Stopped"] },
+          }),
+        }),
+
+        prisma.ticket.count({
+          where: dashboardWhere({
+            ...snapshotWhere,
+            ticketType: 2,
             baseStatus: "New",
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             baseStatus:
               "InAttendance",
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             baseStatus:
               "Stopped",
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
             ...resolvedDateWhere,
-            baseStatus: { in: ["Resolved", "Closed"] },
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
             ...closedDateWhere,
+            NOT: {
+              OR: [
+                { baseStatus: "Canceled" },
+                { status: { contains: "cancel", mode: "insensitive" } },
+                { canceledDate: { not: null } },
+              ],
+            },
           }),
         }),
 
         prisma.ticket.count({
-          where: scopedTicketWhere({
+          where: dashboardWhere({
             ...snapshotWhere,
+            ticketType: 2,
             urgency: "Crítica",
 
             baseStatus: {
@@ -181,9 +197,10 @@ export class DashboardController {
         fechados,
 
         /*
-         * Backlog atual.
+         * Pendentes públicos abertos no período e backlog público atual.
          */
         pendentes,
+        backlogAtual,
         novos,
         emAtendimento,
         parados,
@@ -974,7 +991,7 @@ export class DashboardController {
               assignedToName: true, client: true, criticality: true,
               module: true, process: true, movideskTicket: true,
               deliveredVersion: true, prioritized: true, blockedProcess: true,
-              azureChangedAt: true, stateChangedAt: true, syncedAt: true,
+              azureChangedAt: true, azureClosedAt: true, stateChangedAt: true, syncedAt: true,
             },
           })
         : [];
@@ -1018,11 +1035,11 @@ export class DashboardController {
       const tickets =
         await prisma.ticket.findMany(
           {
-            where: scopedTicketWhere(snapshotWhere),
+            where: dashboardWhere(snapshotWhere),
 
             /* O payload completo é carregado somente no detalhe. */
             select: {
-              id: true, movideskId: true, protocol: true, subject: true,
+              id: true, movideskId: true, ticketType: true, protocol: true, subject: true,
               category: true, cause: true, reason: true, causeDetail: true, urgency: true, status: true,
               baseStatus: true, justification: true, client: true,
               contact: true, owner: true, ownerTeam: true, service: true,
@@ -1126,6 +1143,8 @@ export class DashboardController {
                   true,
                 azureChangedAt:
                   true,
+                azureClosedAt:
+                  true,
                 stateChangedAt:
                   true,
                 syncedAt:
@@ -1165,6 +1184,9 @@ export class DashboardController {
 
             movideskId:
               ticket.movideskId,
+
+            ticketType:
+              ticket.ticketType,
 
             protocol:
               ticket.protocol,
@@ -1506,6 +1528,10 @@ type SnapshotWhere =
  * Snapshot operacional = tickets vistos na última importação completa
  * e bem-sucedida do Movidesk. O histórico permanece preservado.
  */
+function dashboardWhere(where: Prisma.TicketWhereInput = {}): Prisma.TicketWhereInput {
+  return { AND: [movideskDashboardScope(), where] };
+}
+
 async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
   /*
    * Cada número do Movidesk é único no banco. Excel, JSON e API apenas
@@ -1514,8 +1540,7 @@ async function getLatestSnapshotWhere(): Promise<SnapshotWhere> {
    * JSON complementares sem ocultar tickets de lotes anteriores.
    */
   return {
-    ...ticketOperationalScope(),
-    isDeleted: false,
+    ...movideskDashboardScope(),
   };
 }
 

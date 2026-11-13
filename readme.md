@@ -4,9 +4,9 @@ Aplicação Web e Desktop para inteligência operacional do suporte e sustentaç
 
 ## Versão em preparação
 
-`2.1.0-rc.1`
+`2.1.0-rc.2` (versão declarada no pacote Desktop)
 
-O TechLead Hub consolida dados operacionais do Movidesk e Azure DevOps para apoiar analistas e coordenação em investigação, acompanhamento de tickets, Tasks, qualidade dos dados, SLA/OLA, versões e recorrências.
+O TechLead Hub consolida dados operacionais do Movidesk e Azure DevOps para apoiar analistas e coordenação em investigação, acompanhamento de tickets, Tasks, qualidade dos dados, SLA/OLA, versões e recorrências. Também inclui chat interno, calendário/reuniões, notificações e consultas públicas complementares.
 
 ### Áreas principais
 
@@ -21,8 +21,10 @@ O TechLead Hub consolida dados operacionais do Movidesk e Azure DevOps para apoi
 - Movidesk para dados de atendimento.
 - Azure DevOps para Work Items e Wiki.
 - Banco local via Prisma para consolidação e análises.
+- Microsoft Teams Workflows para alertas opcionais de novos tickets. A fila é persistida e só envia quando `TEAMS_ALERTS_ENABLED=true` e o webhook e URL-base estão configurados.
+- SMTP corporativo para fluxos de e-mail quando configurado.
 
-Microsoft 365, SharePoint, Planner, Outlook e Teams não fazem parte da arquitetura ativa desta versão.
+SharePoint, Planner e sincronização com calendário do Outlook não fazem parte da arquitetura ativa. O calendário do Hub é local; o envio ao Teams é uma integração opcional por webhook, sem dependência de Microsoft 365 Graph.
 
 ## Desenvolvimento
 
@@ -44,4 +46,4 @@ O aplicativo Desktop possui scripts próprios em `desktop/package.json`, incluin
 
 ## Documentação
 
-Consulte `docs/` para requisitos, arquitetura, segurança e operação. A documentação deve acompanhar a arquitetura ativa da aplicação; referências a integrações removidas devem ser tratadas como legado até sua revisão.
+Consulte `docs/` para requisitos, arquitetura, segurança, retenção de dados e operação, incluindo [`docs/11-Retencao-de-Dados.md`](docs/11-Retencao-de-Dados.md). Os alertas Teams são opcionais e protegidos por fila persistente; as integrações Microsoft 365 não descritas acima não fazem parte da arquitetura ativa.

@@ -1,4 +1,7 @@
 import { Router } from "express";
+import { bomJesusReport, clientExecutiveReport, DEFAULT_EXECUTIVE_CLIENT, EXECUTIVE_CLIENT_CATALOG, resolveExecutiveClient, ALL_EXECUTIVE_CLIENTS, ALL_EXECUTIVE_CLIENTS_LABEL } from "../services/BomJesusReportService";
+import { createBomJesusExecutiveWorkbook } from "../services/BomJesusExecutiveWorkbook";
+import type { SlaTier } from "../domain/AliareSlaRules";
 import { requirePermission } from "../middlewares/roleMiddleware";
 import { requireAnyPermission } from "../middlewares/routinePermissionMiddleware";
 import { coordinationService } from "../services/CoordinationService";
@@ -11,6 +14,80 @@ coordinationRoutes.use((req, res, next) => {
   const permission = req.path.startsWith("/services") ? "services" : "coordination";
   return requirePermission(permission)(req as AuthenticatedRequest, res, next);
 });
+const bomJesusTier = (req: AuthenticatedRequest): SlaTier | null => req.query.slaTier === "VIP" ? "VIP" : req.query.slaTier === "PADRAO" ? "PADRAO" : null;
+const bomJesusDates = (req: AuthenticatedRequest) => ({
+  startDate: typeof req.query.startDate === "string" ? req.query.startDate : "2026-07-01",
+  endDate: typeof req.query.endDate === "string" ? req.query.endDate : new Date().toISOString().slice(0, 10),
+});
+const requestedExecutiveClient = (req: AuthenticatedRequest): string => {
+  const value = typeof req.query.client === "string" ? req.query.client : DEFAULT_EXECUTIVE_CLIENT;
+  const resolved = resolveExecutiveClient(value);
+  if (!resolved) throw new Error("Cliente não autorizado ou não pertence à carteira SIMER.");
+  return resolved;
+};
+const executiveReportError = (res: import("express").Response, error: unknown, context: string) => {
+  if (error instanceof Error && (error.message.startsWith("Período inválido") || error.message.startsWith("Cliente não autorizado")))
+    return res.status(400).json({ error: error.message });
+  console.error(context, error);
+  return res.status(500).json({ error: "Não foi possível gerar o relatório executivo de clientes." });
+};
+// Catalog is the vetted operational scope: no generic free-text client query.
+coordinationRoutes.get("/client-executive-report/clients", (_req: AuthenticatedRequest, res) => {
+  res.json({ clients: [...EXECUTIVE_CLIENT_CATALOG], defaultClient: DEFAULT_EXECUTIVE_CLIENT, allClientKey: ALL_EXECUTIVE_CLIENTS, allClientLabel: ALL_EXECUTIVE_CLIENTS_LABEL });
+});
+coordinationRoutes.get("/client-executive-report", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { startDate, endDate } = bomJesusDates(req);
+    return res.json(await clientExecutiveReport(requestedExecutiveClient(req), startDate, endDate, bomJesusTier(req)));
+  } catch (error) {
+    return executiveReportError(res, error, "[coordination] Relatório executivo por cliente:");
+  }
+});
+coordinationRoutes.get("/client-executive-report.xlsx", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { startDate, endDate } = bomJesusDates(req);
+    const report = await clientExecutiveReport(requestedExecutiveClient(req), startDate, endDate, bomJesusTier(req));
+    const workbook = createBomJesusExecutiveWorkbook(report);
+    const buffer = await workbook.xlsx.writeBuffer();
+    // ASCII-safe slug; never trust client query when producing a Content-Disposition value.
+    const slug = report.clientFilter.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0,56);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition",
+      `attachment; filename="Relatorio_Executivo_${slug}_${startDate}_a_${endDate}.xlsx"`);
+    res.setHeader("Cache-Control", "no-store");
+    return res.send(Buffer.from(buffer));
+  } catch (error) {
+    return executiveReportError(res, error, "[coordination] Excel executivo por cliente:");
+  }
+});
+
+coordinationRoutes.get("/bom-jesus-report", async (req: AuthenticatedRequest, res) => {
+  try { res.json(await bomJesusReport(bomJesusDates(req).startDate, bomJesusDates(req).endDate, bomJesusTier(req))); }
+  catch (error) {
+    if (error instanceof Error && error.message.startsWith("Período inválido")) return res.status(400).json({ error: error.message });
+    console.error("[coordination] Relatório Bom Jesus:", error);
+    res.status(500).json({ error: "Não foi possível gerar o relatório Bom Jesus." });
+  }
+});
+coordinationRoutes.get("/bom-jesus-report.xlsx", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { startDate, endDate } = bomJesusDates(req);
+    const report = await bomJesusReport(startDate, endDate, bomJesusTier(req));
+    const workbook = createBomJesusExecutiveWorkbook(report);
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition",
+      'attachment; filename="Bom_Jesus_Relatorio_Executivo_' + startDate + '_a_' + endDate + '.xlsx"');
+    res.setHeader("Cache-Control", "no-store");
+    return res.send(Buffer.from(buffer));
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Período inválido"))
+      return res.status(400).json({ error: error.message });
+    console.error("[coordination] Excel executivo Bom Jesus:", error);
+    return res.status(500).json({ error: "Não foi possível exportar o relatório executivo Bom Jesus." });
+  }
+});
+
 coordinationRoutes.get("/details", async (req: AuthenticatedRequest, res) => {
   try {
     const kind = String(req.query.kind ?? "backlog");

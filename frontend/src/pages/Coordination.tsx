@@ -1,4 +1,7 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { ClientExecutiveReportPanel } from "../components/BomJesusReportPanel";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import {
   GroupsOutlined,
   InfoOutlined,
@@ -31,6 +34,7 @@ import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { DetailFieldGrid, DetailPanelHeader, DetailSection } from "../components/DetailPanel";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { PageHeader } from "../components/PageHeader";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { api, getApiErrorMessage } from "../services/api";
 import { aliareColors } from "../theme/theme";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer, ReferenceLine, Tooltip as ChartTooltip, XAxis, YAxis } from "recharts";
@@ -140,16 +144,17 @@ export function Coordination() {
   const [capacity, setCapacity] = useState<{ days: number; businessDays: number; hoursPerDay: number; expectedHours: number; registeredHours: number; coverageRate: number | null; dataSource?: string; hasRegisteredTimeData?: boolean; analysts: Array<{ analyst: string; expectedHours: number; registeredHours: number; coverageRate: number | null }> } | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailTitle, setDetailTitle] = useState("");
   const [detailError, setDetailError] = useState("");
   const [details, setDetails] = useState<DetailData | null>(null);
   const [serviceDays, setServiceDays] = useState(30);
-  const [analyticPeriod, setAnalyticPeriod] = useState<"7d" | "30d" | "60d" | "90d" | "thisMonth" | "lastMonth" | "semester" | "year" | "custom">("30d");
+  const [analyticPeriod, setAnalyticPeriod] = useState<"7d" | "30d" | "60d" | "90d" | "thisMonth" | "lastMonth" | "semester" | "year" | "custom">("thisMonth");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [slaDays, setSlaDays] = useState(30);
-  const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("30d");
+  const [slaPeriod, setSlaPeriod] = useState<"thisMonth" | "lastMonth" | "30d" | "custom">("thisMonth");
   const [slaCustomStart, setSlaCustomStart] = useState("");
   const [slaCustomEnd, setSlaCustomEnd] = useState("");
   const [slaDevelopment, setSlaDevelopment] = useState<SlaDevelopment | null>(null);
@@ -184,15 +189,16 @@ export function Coordination() {
   const analyticPeriodLabel = ({ "7d":"Últimos 7 dias", "30d":"Últimos 30 dias", "60d":"Últimos 60 dias", "90d":"Últimos 90 dias", thisMonth:"Este mês", lastMonth:"Mês passado", semester:"Este semestre", year:"Este ano", custom:"Personalizado" } as const)[analyticPeriod];
 
   const summaryRequest = useRef<AbortController | null>(null);
-  const load = useCallback(async () => {
+  const load = useCallback(async (showLoading = false) => {
     summaryRequest.current?.abort();
     const controller = new AbortController();
     summaryRequest.current = controller;
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
       const response = await api.get<Data>("/coordination/summary", { signal: controller.signal, params: { serviceDays: analyticParams.days, startDate: analyticParams.startDate, endDate: analyticParams.endDate } });
       if (!controller.signal.aborted) setData(response.data);
+      if (!controller.signal.aborted) setRefreshVersion((value) => value + 1);
     } catch (requestError: unknown) {
       if (controller.signal.aborted) return;
       setError(getApiErrorMessage(requestError, "Não foi possível carregar a central."));
@@ -202,9 +208,11 @@ export function Coordination() {
   }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
 
   useEffect(() => {
-    void load();
+    void load(true);
     return () => summaryRequest.current?.abort();
   }, [load]);
+
+  useVisiblePolling(() => load(), 120_000);
 
   useEffect(() => {
     if (!data) return;
@@ -215,7 +223,7 @@ export function Coordination() {
         .catch(() => { if (!controller.signal.aborted) setCapacity(null); });
     }, 120);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [data, serviceDays]);
+  }, [data, serviceDays, refreshVersion]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -223,7 +231,7 @@ export function Coordination() {
       .then((response) => setIntegrationHealth(response.data))
       .catch(() => { if (!controller.signal.aborted) setIntegrationHealth(null); });
     return () => controller.abort();
-  }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate]);
+  }, [analyticParams.days, analyticParams.endDate, analyticParams.startDate, refreshVersion]);
 
   useEffect(() => {
     if (!integrationDrawerOpen) return;
@@ -253,7 +261,7 @@ export function Coordination() {
       .catch(() => { if (!controller.signal.aborted) setSlaDevelopment(null); })
       .finally(() => { if (!controller.signal.aborted) setSlaLoading(false); });
     return () => controller.abort();
-  }, [slaDays, slaPeriod, slaCustomStart, slaCustomEnd]);
+  }, [slaDays, slaPeriod, slaCustomStart, slaCustomEnd, refreshVersion]);
 
   const formatHours = (minutes: number) => minutes ? `${(minutes / 60).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}h` : "—";
   const clampPercent = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
@@ -267,7 +275,7 @@ export function Coordination() {
       .catch(() => { if (!controller.signal.aborted) setCsat(null); })
       .finally(() => { if (!controller.signal.aborted) setCsatLoading(false); });
     return () => controller.abort();
-  }, [serviceDays]);
+  }, [serviceDays, refreshVersion]);
 
   const maximum = useMemo(
     () => Math.max(...(data?.workload.map((item) => item.total) ?? [1]), 1),
@@ -328,8 +336,10 @@ export function Coordination() {
         eyebrow="Coordenação"
         title="Central da Coordenação"
         description="Prioridades, capacidade, qualidade e desenvolvimento da operação em uma visão executiva."
-        meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes cooperativas` : undefined}
+        meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes · Atualizado ${new Date(data.generatedAt).toLocaleTimeString("pt-BR")}` : undefined}
       />
+
+      <ClientExecutiveReportPanel />
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
         <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
@@ -445,9 +455,9 @@ export function Coordination() {
                           <ReferenceLine y={100} stroke={theme.palette.text.disabled} strokeDasharray="5 5" />
                           <ChartTooltip contentStyle={{borderRadius:12,border:`1px solid ${theme.palette.divider}`,backgroundColor:theme.palette.background.paper,color:theme.palette.text.primary}} formatter={(value)=>[`${Number(value).toLocaleString("pt-BR",{maximumFractionDigits:1})}%`]} />
                           <Legend iconType="circle" wrapperStyle={{fontSize:11,paddingTop:8}} />
-                          <Line type="monotone" dataKey="supportWithinPct" name="OLA Suporte" stroke={aliareColors.info} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
-                          <Line type="monotone" dataKey="factoryWithinPct" name="OLA Desenvolvimento" stroke={aliareColors.green} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
-                          <Line type="monotone" dataKey="totalWithinPct" name="SLA concluído" stroke={aliareColors.warning} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
+                          <Line type="linear" dataKey="supportWithinPct" name="OLA Suporte" stroke={aliareColors.info} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
+                          <Line type="linear" dataKey="factoryWithinPct" name="OLA Desenvolvimento" stroke={aliareColors.green} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
+                          <Line type="linear" dataKey="totalWithinPct" name="SLA concluído" stroke={aliareColors.warning} strokeWidth={2.5} dot={{r:2}} activeDot={{r:5}} />
                         </LineChart>
                       </ResponsiveContainer>
                     </Box>
@@ -519,21 +529,18 @@ export function Coordination() {
             </CardContent>
           </Card>
 
-          {loading && !data ? (
-            <Card variant="outlined" sx={{minHeight:240,display:"grid",placeItems:"center",borderRadius:3}}>
-              <Stack spacing={1.5} sx={{alignItems:"center",p:3,textAlign:"center"}}>
-                <CircularProgress size={30} aria-label="Carregando dados da Central da Coordenação"/>
-                <Typography sx={{fontWeight:750}}>Carregando indicadores operacionais</Typography>
-                <Typography variant="body2" color="text.secondary">Estamos consolidando atendimentos, tarefas e métricas do período selecionado.</Typography>
-              </Stack>
-            </Card>
-          ) : error && !data ? (
-            <Alert severity="error" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Tentar novamente</Button>}>
-              <Typography sx={{fontWeight:800,mb:.35}}>Não foi possível carregar a Central</Typography>
-              {error}
-            </Alert>
+          {(loading || error) && !data ? (
+            <AsyncState
+              status={loading ? "loading" : "error"}
+              data={data}
+              error={error}
+              onRetry={() => void load()}
+              loading={<ContentState kind="loading" title="Carregando Central da Coordenação" description="Consolidando atendimentos, tarefas e métricas do período." minHeight={240} />}
+            >
+              {() => null}
+            </AsyncState>
           ) : !data ? (
-            <Alert severity="info" sx={{borderRadius:3}} action={<Button color="inherit" size="small" onClick={() => void load()}>Recarregar</Button>}>Nenhum dado disponível para apresentar neste momento.</Alert>
+            <ContentState kind="empty" title="Nenhum dado disponível" description="Não há informações para apresentar neste momento." onEmptyAction={() => void load()} emptyActionLabel="Recarregar" />
           ) : (
             <Stack spacing={2}>
               <Card variant="outlined" sx={{ overflow: "hidden", borderColor: data.intelligence.health === "critical" ? "error.light" : data.intelligence.health === "attention" ? "warning.light" : "success.light" }}>

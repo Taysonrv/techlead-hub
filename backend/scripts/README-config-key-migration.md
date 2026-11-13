@@ -9,7 +9,8 @@ A chave é compartilhada por ambiente/banco, não por usuário. `JWT_SECRET` ser
 para assinar tokens e não deve ser usada em novas gravações de `SystemSetting`.
 Todas as instâncias que compartilham o banco precisam receber o mesmo valor de
 `SYSTEM_CONFIG_KEY` por configuração segura de implantação. Não gere uma chave
-nova automaticamente por estação nem grave a chave em `SystemSetting`.
+nova automaticamente por estação nem grave a chave em `SystemSetting`. A migração
+cobre as credenciais Azure/Movidesk, as configurações dos três fluxos Teams e a URL base do Movidesk usada nos cards.
 
 ## Premissas
 

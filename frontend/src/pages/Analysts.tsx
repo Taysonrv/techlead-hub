@@ -1,4 +1,7 @@
+import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { KpiGrid } from "../components/KpiGrid";
+import { AsyncState } from "../components/AsyncState";
+import { ContentState } from "../components/ContentState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -48,6 +51,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "@mui/material/styles";
 
 import { api } from "../services/api";
+import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
@@ -1781,34 +1785,18 @@ export function Analysts() {
      LOADING / ERROR
   ===================================================== */
 
-  if (loading) {
+  if (loading || (error && tickets.length === 0)) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent:
-            "center",
-          mt: 8,
-        }}
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando analistas" minHeight={360} />}
       >
-        <CircularProgress
-          sx={{
-            color:
-              aliareColors.green,
-          }}
-        />
-      </Box>
+        {() => null}
+      </AsyncState>
     );
   }
-
-  if (error && tickets.length === 0) {
-    return (
-      <Alert severity="error">
-        {error}
-      </Alert>
-    );
-  }
-
 
   const visibleAnalystPieData = analystPieData.filter((item) => !hiddenAnalystSlices.has(item.name));
   const visibleStatusPieData = statusPieData.filter((item) => !hiddenStatusSlices.has(item.name));
@@ -4222,155 +4210,7 @@ export function Analysts() {
                 </Alert>
               )}
 
-              {drilldown.tickets.map(
-                (ticket) => (
-                  <Box
-                    key={
-                      ticket.id
-                    }
-                    role="button"
-                    tabIndex={0}
-                    onClick={() =>
-                      setSelectedTicket(
-                        ticket
-                      )
-                    }
-                    onKeyDown={(
-                      event
-                    ) => {
-                      if (
-                        event.key ===
-                          "Enter" ||
-                        event.key ===
-                          " "
-                      ) {
-                        setSelectedTicket(
-                          ticket
-                        );
-                      }
-                    }}
-                    sx={{
-                      py: 1.5,
-
-                      borderBottom:
-                        "1px solid",
-
-                      borderColor:
-                        "divider",
-
-                      cursor:
-                        "pointer",
-
-                      "&:hover": {
-                        backgroundColor:
-                          "action.hover",
-                      },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={0.5}
-                      sx={{
-                        alignItems:
-                          "center",
-                      }}
-                    >
-                      <Typography
-                        variant="body2"
-                       sx={{ fontWeight: 800 }}
-                      >
-                        #{ticket.movideskId}
-                      </Typography>
-
-                      <IconButton
-                        size="small"
-                        title="Copiar número do ticket"
-                        onClick={(
-                          event
-                        ) => {
-                          event.stopPropagation();
-
-                          void copyTicketNumber(
-                            ticket
-                          );
-                        }}
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          fontSize:
-                            "0.75rem",
-                        }}
-                      >
-                        ⧉
-                      </IconButton>
-
-                      <IconButton
-                        size="small"
-                        title="Abrir no Movidesk"
-                        aria-label={`Abrir ticket ${ticket.movideskId} no Movidesk`}
-                        onClick={(
-                          event
-                        ) => {
-                          event.stopPropagation();
-
-                          openMovideskTicket(
-                            ticket
-                          );
-                        }}
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          fontSize:
-                            "0.8rem",
-                        }}
-                      >
-                        ↗
-                      </IconButton>
-                    </Stack>
-
-                    <Typography
-                      variant="body2"
-                     sx={{ fontWeight: 600 }}
-                    >
-                      {
-                        ticket.subject
-                      }
-                    </Typography>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                    >
-                      {ticket.client ??
-                        "Sem cliente"}
-                      {" • "}
-                      {ticket.owner ??
-                        "Sem responsável"}
-                      {" • "}
-                      {(ticket.ownerTeam ?? ticket.team) ??
-                        "Sem squad"}
-                      {ticket.service
-                        ? ` • ${ticket.service}`
-                        : ""}
-                    </Typography>
-
-                    {ticket.azureWorkItem && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block", mt: 0.25 }}
-                      >
-                        Azure #{ticket.azureWorkItem.id}
-                        {" • "}
-                        {ticket.azureWorkItem.state}
-                        {ticket.azureWorkItem.assignedToName
-                          ? ` • ${ticket.azureWorkItem.assignedToName}`
-                          : " • Sem responsável Azure"}
-                      </Typography>
-                    )}
-                  </Box>
-                )
-              )}
+              <TicketDrilldownExplorer key={drilldown.title} tickets={drilldown.tickets} onSelect={(ticket)=>setSelectedTicket(ticket)} onOpen={(ticket)=>openMovideskTicket(ticket)} />
             </>
           )}
         </Box>
@@ -4394,10 +4234,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 320,
-              sm: 500,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
 
             p: 2.5,
           }}
@@ -4704,10 +4543,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 340,
-              sm: 620,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
             p: 2.5,
           }}
         >
@@ -4852,10 +4690,9 @@ export function Analysts() {
       >
         <Box
           sx={{
-            width: {
-              xs: 340,
-              sm: 620,
-            },
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
             p: 2.5,
           }}
         >
@@ -5662,14 +5499,7 @@ function TicketField({
 function isOpen(
   ticket: Ticket
 ) {
-  return (
-    ticket.baseStatus ===
-      "New" ||
-    ticket.baseStatus ===
-      "InAttendance" ||
-    ticket.baseStatus ===
-      "Stopped"
-  );
+  return isOperationallyOpen(ticket);
 }
 
 /* =====================================================

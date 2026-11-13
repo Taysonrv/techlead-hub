@@ -12,10 +12,27 @@ const SETTING_ENV = {
   pat: "AZURE_DEVOPS_PAT",
   movideskToken: "MOVIDESK_TOKEN",
   movideskUrl: "MOVIDESK_URL",
+  weatherApiKey: "WEATHER_API_KEY",
+  teamsSupportTicketsEnabled: "TEAMS_SUPPORT_NEW_TICKETS_ENABLED",
+  teamsSupportTicketsWebhook: "TEAMS_SUPPORT_NEW_TICKETS_WEBHOOK_URL",
+  teamsTaskCreatedEnabled: "TEAMS_AZURE_TASK_CREATED_ENABLED",
+  teamsTaskCreatedWebhook: "TEAMS_AZURE_TASK_CREATED_WEBHOOK_URL",
+  teamsTaskRegistroEnabled: "TEAMS_AZURE_TASK_REGISTRO_ENABLED",
+  teamsTaskRegistroWebhook: "TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL",
+  teamsTicketBaseUrl: "TEAMS_TICKET_BASE_URL",
 } as const;
 
 export type SystemConfigurationInput = Partial<Record<keyof typeof SETTING_ENV, string>>;
 export type SystemConfigurationTestInput = SystemConfigurationInput & { integration?: "azure" | "movidesk"; reportMonth?: string };
+export type TeamsWorkflowSettingsInput = Partial<{
+  supportTicketsEnabled: boolean;
+  supportTicketsWebhookUrl: string;
+  taskCreatedEnabled: boolean;
+  taskCreatedWebhookUrl: string;
+  taskRegistroEnabled: boolean;
+  taskRegistroWebhookUrl: string;
+  ticketBaseUrl: string;
+}>;
 
 type SettingRow = { key: string; value: string };
 
@@ -55,10 +72,6 @@ class SystemConfigurationService {
   }
 
   private decrypt(value: string) {
-    const [version, iv, tag, encrypted] = value.split(":");
-    if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Configuração central inválida.");
-    // Dados legados podem ter sido criptografados com JWT_SECRET antes da
-    // introdução de SYSTEM_CONFIG_KEY. Tentar as chaves sem alterar registros.
     const secrets = [
       process.env.SYSTEM_CONFIG_KEY?.trim(),
       process.env.JWT_SECRET?.trim(),
@@ -68,50 +81,125 @@ class SystemConfigurationService {
       if (tried.has(secret)) continue;
       tried.add(secret);
       try {
-        const key = crypto.createHash("sha256").update(secret).digest();
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
-        decipher.setAuthTag(Buffer.from(tag, "base64"));
-        return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+        return this.decryptWithSecret(value, secret);
       } catch {
-        // Só as chaves disponíveis são testadas; nunca registrar seus valores.
+        // Tentar a próxima chave legada disponível sem registrar segredos.
       }
     }
     throw new Error("Configuração criptografada incompatível com as chaves disponíveis.");
   }
 
-  // Compara uma chave candidata com os registros de integração existentes.
-  // Somente leitura; não altera a chave do processo nem retorna valores.
+  private decryptWithSecret(value: string, secret: string) {
+    const [version, iv, tag, encrypted] = value.split(":");
+    if (version !== "v1" || !iv || !tag || !encrypted) throw new Error("Configuração central inválida.");
+    const key = crypto.createHash("sha256").update(secret).digest();
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
+    decipher.setAuthTag(Buffer.from(tag, "base64"));
+    return Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]).toString("utf8");
+  }
+
+  private validateWorkflowWebhook(value: string): string {
+    if (value.trim().length > 4096) throw new Error("A URL do Workflow do Teams excede o tamanho permitido.");
+    let url: URL;
+    try { url = new URL(value.trim()); }
+    catch { throw new Error("Informe uma URL válida do Workflow do Teams."); }
+    if (url.protocol !== "https:" || url.username || url.password) {
+      throw new Error("A URL do Workflow do Teams deve usar HTTPS e não pode conter usuário ou senha.");
+    }
+    return url.toString();
+  }
+
+  private validateTicketBaseUrl(value: string): string {
+    if (value.trim().length > 2048) throw new Error("A URL base do Movidesk excede o tamanho permitido.");
+    let url: URL;
+    try { url = new URL(value.trim()); }
+    catch { throw new Error("Informe uma URL válida para o Movidesk."); }
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+      throw new Error("A URL base do Movidesk deve usar HTTPS e não pode conter usuário, senha, consulta ou fragmento.");
+    }
+    return url.toString().replace(/\/$/, "");
+  }
+
+  private async saveEncryptedSettings(
+    values: Array<[keyof typeof SETTING_ENV, string]>,
+    updatedById: number,
+    action: string,
+  ) {
+    if (!values.length) return;
+    const entries = values.map(([key, value]) => ({ key, value: this.encrypt(value) }));
+    await prisma.$transaction(async (tx) => {
+      for (const entry of entries) {
+        await tx.$executeRaw`
+          INSERT INTO "SystemSetting" ("key", "value", "encrypted", "updatedAt", "updatedById")
+          VALUES (${entry.key}, ${entry.value}, TRUE, CURRENT_TIMESTAMP, ${updatedById})
+          ON CONFLICT ("key") DO UPDATE SET
+            "value" = EXCLUDED."value",
+            "encrypted" = TRUE,
+            "updatedAt" = CURRENT_TIMESTAMP,
+            "updatedById" = EXCLUDED."updatedById"
+        `;
+      }
+      await tx.auditLog.create({
+        data: { userId: updatedById, action, entity: "SystemSetting", metadata: { keys: entries.map(({ key }) => key) } },
+      });
+    });
+    for (const [key, value] of values) process.env[SETTING_ENV[key]] = value;
+  }
+
+  // A chave candidata pode abrir registros diretamente; outros podem depender
+  // exclusivamente da JWT_SECRET desta instalação. A validação informa se a
+  // candidata foi comprovada pelo banco ou se haverá recriptografia explícita
+  // dos registros legados que ainda são legíveis localmente.
   async validateRecoveryKey(candidate: string) {
-    if (candidate.length < 32 || candidate.length > 4096) return false;
+    if (candidate.length < 32 || candidate.length > 4096) return { valid: false, candidateVerified: false };
     const rows = await prisma.$queryRaw<SettingRow[]>`
       SELECT "key", "value" FROM "SystemSetting"
     `;
     const known = rows.filter(row => Object.prototype.hasOwnProperty.call(SETTING_ENV, row.key));
-    if (!known.length) return false;
-    const key = crypto.createHash("sha256").update(candidate).digest();
+    if (!known.length) return { valid: false, candidateVerified: false };
+    const fallbackSecrets = [process.env.SYSTEM_CONFIG_KEY?.trim(), process.env.JWT_SECRET?.trim()]
+      .filter((secret): secret is string => Boolean(secret && secret.length >= 32 && secret !== candidate));
+    let openedWithCandidate = 0;
     for (const row of known) {
+      let readable = false;
       try {
-        const [version, iv, tag, payload] = row.value.split(":");
-        if (version !== "v1" || !iv || !tag || !payload) return false;
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
-        decipher.setAuthTag(Buffer.from(tag, "base64"));
-        Buffer.concat([decipher.update(Buffer.from(payload, "base64")), decipher.final()]);
-      } catch {
-        return false;
+        this.decryptWithSecret(row.value, candidate);
+        openedWithCandidate += 1;
+        readable = true;
+      } catch { /* Tentar as chaves de compatibilidade desta instalação. */ }
+      if (!readable) {
+        for (const secret of fallbackSecrets) {
+          try {
+            this.decryptWithSecret(row.value, secret);
+            readable = true;
+            break;
+          } catch { /* Continuar apenas com as chaves já disponíveis. */ }
+        }
       }
+      if (!readable) return { valid: false, candidateVerified: false };
     }
-    return true;
+    return { valid: true, candidateVerified: openedWithCandidate > 0 };
   }
 
   async loadIntoEnvironment() {
     const rows = await prisma.$queryRawUnsafe<SettingRow[]>(`SELECT "key", "value" FROM "SystemSetting"`);
     const persistedKeys = new Set<string>();
     const resolved: Array<{ envName: string; value: string }> = [];
+    const legacyRows: Array<{ key: string; originalValue: string; value: string }> = [];
+    const sharedKey = process.env.SYSTEM_CONFIG_KEY?.trim();
     for (const row of rows) {
       const envName = SETTING_ENV[row.key as keyof typeof SETTING_ENV];
       if (!envName) continue;
       try {
-        resolved.push({ envName, value: this.decrypt(row.value) });
+        const value = this.decrypt(row.value);
+        resolved.push({ envName, value });
+        if (sharedKey && sharedKey.length >= 32) {
+          try {
+            this.decryptWithSecret(row.value, sharedKey);
+          } catch {
+            legacyRows.push({ key: row.key, originalValue: row.value, value: this.encrypt(value) });
+          }
+        }
       } catch {
         // Não expor valores criptografados, segredos ou detalhes de autenticação.
         // Uma chave de instalação diferente não deve provocar carregamento parcial.
@@ -119,7 +207,19 @@ class SystemConfigurationService {
       }
       persistedKeys.add(row.key);
     }
+    if (legacyRows.length) {
+      await prisma.$transaction(async (tx) => {
+        for (const row of legacyRows) {
+          await tx.$executeRaw`
+            UPDATE "SystemSetting"
+            SET "value" = ${row.value}, "encrypted" = TRUE, "updatedAt" = CURRENT_TIMESTAMP
+            WHERE "key" = ${row.key} AND "value" = ${row.originalValue}
+          `;
+        }
+      });
+    }
     for (const entry of resolved) process.env[entry.envName] = entry.value;
+    process.env.APP_INTEGRATIONS_CONFIG_STATUS = "ready";
     return persistedKeys;
   }
 
@@ -132,10 +232,58 @@ class SystemConfigurationService {
       wiki: process.env.AZURE_DEVOPS_WIKI ?? "",
       patConfigured: Boolean(process.env.AZURE_DEVOPS_PAT),
       azureCredentialSource: persistedKeys.has("pat") ? "central" : process.env.AZURE_DEVOPS_PAT?.trim() ? "environment" : "missing",
+      weatherConfigured: Boolean(process.env.WEATHER_API_KEY?.trim()),
+      weatherCredentialSource: persistedKeys.has("weatherApiKey") ? "central" : process.env.WEATHER_API_KEY?.trim() ? "environment" : "missing",
       movideskConfigured: Boolean(process.env.MOVIDESK_TOKEN),
       movideskUrl: process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
+      teamsWorkflows: {
+        supportTicketsEnabled: process.env.TEAMS_SUPPORT_NEW_TICKETS_ENABLED?.trim().toLowerCase() === "true",
+        supportTicketsWebhookConfigured: Boolean(process.env.TEAMS_SUPPORT_NEW_TICKETS_WEBHOOK_URL?.trim()),
+        taskCreatedEnabled: process.env.TEAMS_AZURE_TASK_CREATED_ENABLED?.trim().toLowerCase() === "true",
+        taskCreatedWebhookConfigured: Boolean(process.env.TEAMS_AZURE_TASK_CREATED_WEBHOOK_URL?.trim()),
+        taskRegistroEnabled: process.env.TEAMS_AZURE_TASK_REGISTRO_ENABLED?.trim().toLowerCase() === "true",
+        taskRegistroWebhookConfigured: Boolean(process.env.TEAMS_AZURE_TASK_REGISTRO_WEBHOOK_URL?.trim()),
+        ticketBaseUrlConfigured: Boolean(process.env.TEAMS_TICKET_BASE_URL?.trim()),
+        ticketBaseUrl: process.env.TEAMS_TICKET_BASE_URL?.trim() ?? "",
+      },
     };
+  }
+
+  async saveTeamsWorkflowSettings(input: TeamsWorkflowSettingsInput, updatedById: number) {
+    await this.loadIntoEnvironment();
+    const updates: Array<[keyof typeof SETTING_ENV, string]> = [];
+    if (input.ticketBaseUrl?.trim()) updates.push(["teamsTicketBaseUrl", this.validateTicketBaseUrl(input.ticketBaseUrl)]);
+    const processInputs = [
+      { enabled: input.supportTicketsEnabled, webhook: input.supportTicketsWebhookUrl, enabledKey: "teamsSupportTicketsEnabled", webhookKey: "teamsSupportTicketsWebhook", label: "aviso de tickets novos" },
+      { enabled: input.taskCreatedEnabled, webhook: input.taskCreatedWebhookUrl, enabledKey: "teamsTaskCreatedEnabled", webhookKey: "teamsTaskCreatedWebhook", label: "aviso de task criada" },
+      { enabled: input.taskRegistroEnabled, webhook: input.taskRegistroWebhookUrl, enabledKey: "teamsTaskRegistroEnabled", webhookKey: "teamsTaskRegistroWebhook", label: "aviso de retorno ao Registro" },
+    ] as const;
+
+    for (const item of processInputs) {
+      if (item.enabled !== undefined) {
+        if (typeof item.enabled !== "boolean") throw new Error("Os controles dos processos Teams devem ser booleanos.");
+        updates.push([item.enabledKey, String(item.enabled)]);
+      }
+      if (item.webhook?.trim()) updates.push([item.webhookKey, this.validateWorkflowWebhook(item.webhook)]);
+    }
+
+    const effectiveValue = (key: keyof typeof SETTING_ENV) =>
+      updates.find(([candidate]) => candidate === key)?.[1] ?? process.env[SETTING_ENV[key]] ?? "";
+    for (const item of processInputs) {
+      const enabledKey = item.enabledKey;
+      const webhookKey = item.webhookKey;
+      if (effectiveValue(enabledKey) === "true" && !effectiveValue(webhookKey).trim()) {
+        throw new Error(`Configure a URL do Workflow antes de ativar o ${item.label}.`);
+      }
+    }
+    if (processInputs.some((item) => effectiveValue(item.enabledKey) === "true")) {
+      if (!effectiveValue("teamsTicketBaseUrl").trim()) throw new Error("Configure a URL base do Movidesk antes de ativar os fluxos do Teams.");
+      this.validateTicketBaseUrl(effectiveValue("teamsTicketBaseUrl"));
+    }
+
+    await this.saveEncryptedSettings(updates, updatedById, "TEAMS_WORKFLOW_SETTINGS_UPDATED");
+    return this.status();
   }
 
   private async validateAzureCandidate(input: SystemConfigurationInput) {
@@ -226,6 +374,13 @@ class SystemConfigurationService {
     if (azure && (input.pat?.trim() || azure.organization !== currentAzure?.organization || azure.project !== currentAzure?.project))
       await this.validateAzureCandidate(input);
     if (input.movideskToken?.trim()) await this.validateMovideskCandidate(input);
+    if(input.weatherApiKey?.trim()){
+      if(input.weatherApiKey.trim().length>256)throw new Error("A chave do clima excede o tamanho permitido.");
+      const url=new URL("https://api.weatherapi.com/v1/current.json");url.searchParams.set("key",input.weatherApiKey.trim());url.searchParams.set("q","Brasilia");
+      let response:Response;
+      try{response=await fetch(url,{signal:AbortSignal.timeout(8_000)});}catch{throw new Error("Não foi possível validar a chave do clima. Tente novamente.");}
+      if(!response.ok)throw new Error("A chave do clima não foi aceita pelo provedor. Confira a chave e o limite de uso.");
+    }
 
     const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {

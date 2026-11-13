@@ -3,7 +3,9 @@ export type OperationalMetricTicket = {
   resolvedDate?: string | null;
   closedDate?: string | null;
   baseStatus?: string | null;
+  ticketType?: number | null;
   status?: string | null;
+  canceledDate?: string | null;
   isWithSimer?: boolean;
 };
 
@@ -15,22 +17,35 @@ const inPeriod = (value: string | null | undefined, period: OperationalPeriod) =
   return Number.isFinite(date.getTime()) && date >= period.start && date <= period.end;
 };
 
+const OPEN_BASE_STATUSES = new Set(["new", "inattendance", "stopped"]);
+
+/**
+ * Backlog atual segue os estados canônicos aceitos pelo backend.
+ * Status ausente/desconhecido não deve ser presumido como pendente.
+ */
 export const isOperationallyOpen = (ticket: OperationalMetricTicket) => {
-  const status = (ticket.baseStatus ?? ticket.status ?? "").trim().toLowerCase();
-  return !["resolved", "closed", "canceled", "cancelled", "resolvido", "fechado", "cancelado"].includes(status);
+  const baseStatus = (ticket.baseStatus ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  return OPEN_BASE_STATUSES.has(baseStatus);
+};
+
+export const isTicketCancelled = (ticket: OperationalMetricTicket) => {
+  const baseStatus = (ticket.baseStatus ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  const status = (ticket.status ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  return Boolean(ticket.canceledDate) || baseStatus === "canceled" || status.includes("cancel");
 };
 
 export function buildOperationalCohorts<T extends OperationalMetricTicket>(
   tickets: T[],
   period: OperationalPeriod,
+  scope: "currentSimer" | "allImported" = "currentSimer",
 ) {
-  const simer = tickets.filter((ticket) => ticket.isWithSimer === true);
+  const simer = scope === "allImported" ? tickets : tickets.filter((ticket) => ticket.isWithSimer === true);
   return {
     entries: simer.filter((ticket) => inPeriod(ticket.createdDate, period)),
-    resolved: simer.filter((ticket) => inPeriod(ticket.resolvedDate, period) &&
-      ["resolved", "closed", "resolvido", "fechado"].includes((ticket.baseStatus ?? ticket.status ?? "").trim().toLowerCase())),
-    closed: simer.filter((ticket) => inPeriod(ticket.closedDate, period)),
-    backlog: simer.filter(isOperationallyOpen),
+    resolved: simer.filter((ticket) => inPeriod(ticket.resolvedDate, period)),
+    closed: simer.filter((ticket) => inPeriod(ticket.closedDate, period) && !isTicketCancelled(ticket)),
+    backlog: simer.filter((ticket) => ticket.ticketType === 2 && isOperationallyOpen(ticket)),
+    pendingInPeriod: simer.filter((ticket) => ticket.ticketType === 2 && isOperationallyOpen(ticket) && inPeriod(ticket.createdDate, period)),
   };
 }
 

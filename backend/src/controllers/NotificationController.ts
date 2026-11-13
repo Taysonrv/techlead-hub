@@ -61,14 +61,15 @@ export class NotificationController {
   ) => {
     const userId = request.auth?.userId;
     if (!userId) return response.status(401).json({ message: "Autenticação necessária." });
+    const current = await this.service.preferences(userId);
     const boolean = (value: unknown, fallback = true) =>
       typeof value === "boolean" ? value : fallback;
     const preferences = await this.service.savePreferences(userId, {
-      appVersion: boolean(request.body?.appVersion),
-      simerVersion: boolean(request.body?.simerVersion),
-      azureCompleted: boolean(request.body?.azureCompleted),
-      azureUpdated: boolean(request.body?.azureUpdated),
-      desktopAlerts: boolean(request.body?.desktopAlerts),
+      appVersion: boolean(request.body?.appVersion, current.appVersion),
+      simerVersion: boolean(request.body?.simerVersion, current.simerVersion),
+      azureCompleted: boolean(request.body?.azureCompleted, current.azureCompleted),
+      azureUpdated: boolean(request.body?.azureUpdated, current.azureUpdated),
+      desktopAlerts: boolean(request.body?.desktopAlerts, current.desktopAlerts),
     });
     return response.json({ preferences });
   };

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import { prisma } from "../database/prisma";
 import type { Prisma } from "@prisma/client";
@@ -5,7 +6,7 @@ import { SIMER_CLIENTS, SUPPORT_ANALYSTS, ticketOperationalScope, azureOperation
 import { analyzeMovideskIndicators } from "./MovideskPayloadAnalytics";
 import { reviewTicketClassification } from "./TicketClassificationReview";
 import { SIMER_SERVICE_CATALOG, suggestSimerService, type SimerServiceCatalogItem } from "../domain/SimerServiceCatalog";
-import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketFinalized, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
+import { OPEN_TICKET_BASE_STATES, OPERATIONAL_AGING, hoursBefore, isOperationalTicketOpen, isTerminalWorkItemState, normalizeOperationalText, ticketLastRecordedMovement } from "../domain/OperationalLifecycleRules";
 
 const dataQualityCache = new Map<string, { expiresAt: number; value: unknown }>();
 
@@ -15,6 +16,7 @@ export type DataQualityParams = {
   user?: string | null;
   issue?: string | null;
   search?: string | null;
+  exportAll?: boolean;
 };
 
 export class DataQualityService {
@@ -24,23 +26,32 @@ export class DataQualityService {
     user?: string | null;
     issue?: string | null;
     search?: string | null;
+    exportAll?: boolean;
   } = {}) {
     const multi = (value?: string | null) => (value ?? "").split("|||").map((item) => item.trim()).filter(Boolean);
     const types = multi(params.type);
     const clients = multi(params.client);
     const users = multi(params.user);
+    const sampleLimit = <T,>(items: T[], limit: number) => params.exportAll ? items : items.slice(0, limit);
     const cacheKey = JSON.stringify(params);
     const cached = dataQualityCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     if (dataQualityCache.size > 40) dataQualityCache.clear();
 
-    const [scopedTickets, allTicketLinks] = await Promise.all([
+    const [baseTickets, allTicketLinks] = await Promise.all([
       prisma.ticket.findMany({
       where: scopedTicketWhere({
         AND: [
           ticketOperationalScope(),
           ...(clients.length ? [{ client: { in: clients, mode: "insensitive" as const } }] : []),
           ...(users.length ? [{ owner: { in: users, mode: "insensitive" as const } }] : []),
+          ...(params.search ? [{ OR: [
+            { subject: { contains: params.search, mode: "insensitive" as const } },
+            ...(Number.isSafeInteger(Number(params.search)) ? [
+              { movideskId: Number(params.search) },
+              { taskNumber: Number(params.search) },
+            ] : []),
+          ] }] : []),
         ],
       }),
       select: {
@@ -54,11 +65,11 @@ export class DataQualityService {
     }),
       prisma.ticket.findMany({
         where: scopedTicketWhere({ AND: [ticketOperationalScope(), { taskNumber: { not: null } }] }),
-        select: { taskNumber: true },
+        select: { taskNumber: true, movideskId: true },
       }),
     ]);
-    const taskIds = scopedTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
-    const movideskIds = scopedTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
+    const taskIds = baseTickets.map((item) => item.taskNumber).filter((value): value is number => value !== null);
+    const movideskIds = baseTickets.map((item) => item.movideskId).filter((value): value is number => value !== null);
     const csatResponses = movideskIds.length ? await prisma.movideskSurveyResponse.findMany({
       where: { ticketId: { in: movideskIds }, type: 2 },
       orderBy: [{ ticketId: "asc" }, { responseDate: "desc" }],
@@ -78,27 +89,29 @@ export class DataQualityService {
       const byId = new Map(linked.map((item) => [item.id, item]));
       const normalize = normalizeOperationalText;
       // O overview histórico usava baseStatus estrito para "aberto"; preserve esse recorte aqui.
-      const open = (ticket: (typeof scopedTickets)[number]) =>
+      const open = (ticket: (typeof baseTickets)[number]) =>
         OPEN_TICKET_BASE_STATES.includes((ticket.baseStatus ?? "") as typeof OPEN_TICKET_BASE_STATES[number])
         && isOperationalTicketOpen(ticket);
-      const finalized = isOperationalTicketFinalized;
+      const finalized = (ticket: (typeof baseTickets)[number]) =>
+        ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
+        || /conclu|fechad|encerrad|resolvid|cancelad/.test(normalize(ticket.status));
       const terminal = isTerminalWorkItemState;
       const support = (type: string) => normalize(type).includes("apoio");
       const staleThreshold = hoursBefore(new Date(), OPERATIONAL_AGING.ticketStaleHours);
-      const analytics = new Map(scopedTickets.map((ticket) => [ticket.id, analyzeMovideskIndicators(ticket.rawData)]));
-      const awaitingReturnOverdue = scopedTickets.filter((ticket) => {
+      const analytics = new Map(baseTickets.map((ticket) => [ticket.id, analyzeMovideskIndicators(ticket.rawData)]));
+      const awaitingReturnOverdue = baseTickets.filter((ticket) => {
         const movement = ticket.lastActionDate ?? ticket.lastUpdate;
         return open(ticket) && (/aguardando.*retorno|retorno.*cliente/.test(normalize(ticket.status)) || /aguardando.*retorno|retorno.*cliente/.test(normalize(ticket.justification))) && Boolean(movement && movement < staleThreshold);
       }).length;
-      const reopenedTickets = scopedTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.reopenCount ?? 0) > 0).length;
-      const excessiveOwnerHandoffs = scopedTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.ownerHandoffs ?? 0) >= 3).length;
-      const danglingTaskTickets = scopedTickets.filter((ticket) => ticket.taskNumber !== null && !byId.has(ticket.taskNumber)).length;
-      const ticketOpenTaskFinished = scopedTickets.filter((ticket) => {
+      const reopenedTickets = baseTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.reopenCount ?? 0) > 0).length;
+      const excessiveOwnerHandoffs = baseTickets.filter((ticket) => open(ticket) && (analytics.get(ticket.id)?.ownerHandoffs ?? 0) >= 3).length;
+      const danglingTaskTickets = baseTickets.filter((ticket) => open(ticket) && ticket.taskNumber !== null && !byId.has(ticket.taskNumber)).length;
+      const ticketOpenTaskFinished = baseTickets.filter((ticket) => {
         if (!open(ticket) || !ticket.taskNumber) return false;
         const task = byId.get(ticket.taskNumber);
         return Boolean(task && !support(task.workItemType) && terminal(task.state) && task.deliveredVersion?.trim());
       }).length;
-      const ticketClosedTaskOpen = scopedTickets.filter((ticket) => {
+      const ticketClosedTaskOpen = baseTickets.filter((ticket) => {
         if (!finalized(ticket) || !ticket.taskNumber) return false;
         const task = byId.get(ticket.taskNumber);
         return Boolean(task && !support(task.workItemType) && !terminal(task.state));
@@ -181,27 +194,15 @@ export class DataQualityService {
           .some((id) => movideskIdScope.has(Number(id)));
     };
     const linkedTasks = linkedTaskCandidates.filter(belongsToOperationalScope);
-
-    const existingTaskIds = new Set(linkedTasks.map((item) => item.id));
-    const danglingTickets = scopedTickets.filter((ticket) =>
-      ticket.taskNumber !== null && !existingTaskIds.has(ticket.taskNumber),
-    );
-    const movideskLinkCounts = new Map<number, number>();
-    linkedTasks.forEach((item) => {
-      if (item.movideskTicket) {
-        movideskLinkCounts.set(item.movideskTicket, (movideskLinkCounts.get(item.movideskTicket) ?? 0) + 1);
-      }
-    });
-    const duplicatedIds = [...movideskLinkCounts.entries()]
-      .filter(([, count]) => count > 1).map(([id]) => id);
-    const withoutTicket = linkedTasks.filter((item) =>
-      !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id),
-    ).length;
-    const withoutClient = linkedTasks.filter((item) =>
-      !/apoio/i.test(item.workItemType) && !item.client && !item.participantClients,
-    ).length;
-    const withoutModule = linkedTasks.filter((item) => !item.module).length;
-    const withoutOwner = linkedTasks.filter((item) => !item.assignedToName).length;
+    const typedTicketIds = new Set<number>();
+    const typedTaskIds = new Set(linkedTasks.map((task) => task.id));
+    for (const task of linkedTasks) {
+      if (task.movideskTicket) typedTicketIds.add(task.movideskTicket);
+      (task.participantMovideskTickets?.match(/\d+/g) ?? []).forEach((id) => typedTicketIds.add(Number(id)));
+    }
+    const scopedTickets = types.length
+      ? baseTickets.filter((ticket) => typedTicketIds.has(ticket.movideskId) || (ticket.taskNumber !== null && typedTaskIds.has(ticket.taskNumber)))
+      : baseTickets;
 
     const normalizeStatus = (value: string) => normalizeOperationalText(value);
     const isTicketOpen = (ticket: { baseStatus: string | null; status: string }) =>
@@ -221,6 +222,32 @@ export class DataQualityService {
       return ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")
         || /conclu|fechad|encerrad|resolvid|cancelad/.test(status);
     };
+    const isSupportTask = (task: { workItemType: string }) => normalizeStatus(task.workItemType).includes("apoio");
+    const isCanceledTask = (state: string) => /cancelad|canceled|remov|deleted|exclu/.test(normalizeStatus(state));
+    const isTerminalTask = isTerminalWorkItemState;
+    const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
+    const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
+
+    const existingTaskIds = new Set(linkedTasks.map((item) => item.id));
+    const danglingTickets = scopedTickets.filter((ticket) =>
+      isTicketOpen(ticket) && ticket.taskNumber !== null && !existingTaskIds.has(ticket.taskNumber),
+    );
+    const movideskLinkCounts = new Map<number, number>();
+    activeLinkedTasks.forEach((item) => {
+      if (item.movideskTicket) {
+        movideskLinkCounts.set(item.movideskTicket, (movideskLinkCounts.get(item.movideskTicket) ?? 0) + 1);
+      }
+    });
+    const duplicatedIds = [...movideskLinkCounts.entries()]
+      .filter(([, count]) => count > 1).map(([id]) => id);
+    const withoutTicket = activeLinkedTasks.filter((item) =>
+      !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id),
+    ).length;
+    const withoutClient = activeLinkedTasks.filter((item) =>
+      !/apoio/i.test(item.workItemType) && !item.client && !item.participantClients,
+    ).length;
+    const withoutModule = activeLinkedTasks.filter((item) => !item.module).length;
+    const withoutOwner = activeLinkedTasks.filter((item) => !item.assignedToName).length;
     const sameClient = (left: string, right: string) => {
       const normalizedLeft = normalizeStatus(left).replace(/[^a-z0-9]+/g, " ").trim();
       const normalizedRight = normalizeStatus(right).replace(/[^a-z0-9]+/g, " ").trim();
@@ -228,11 +255,6 @@ export class DataQualityService {
         || normalizedLeft.includes(normalizedRight)
         || normalizedRight.includes(normalizedLeft);
     };
-    const isSupportTask = (task: { workItemType: string }) => normalizeStatus(task.workItemType).includes("apoio");
-    const isCanceledTask = (state: string) => /cancelad|canceled/.test(normalizeStatus(state));
-    const isTerminalTask = isTerminalWorkItemState;
-    const finishedLinkedTasks = linkedTasks.filter((item) => isTerminalTask(item.state));
-    const activeLinkedTasks = linkedTasks.filter((item) => !isTerminalTask(item.state));
     const completedWithoutVersionTasks = finishedLinkedTasks.filter((item) =>
       !isSupportTask(item) && !isCanceledTask(item.state) && !item.deliveredVersion?.trim(),
     );
@@ -280,6 +302,7 @@ export class DataQualityService {
     const clientMismatches = scopedTickets.flatMap((ticket) => {
       const task = findLinkedTask(ticket, allLinks);
       if (!task || !ticket.client || isSupportTask(task)) return [];
+      if (!isTicketOpen(ticket) && isTerminalTask(task.state)) return [];
       const taskClients = [
         ...(task.client ? [task.client] : []),
         ...(task.participantClients?.split(/[;,\r\n]+/).map((value) => value.trim()).filter(Boolean) ?? []),
@@ -289,8 +312,8 @@ export class DataQualityService {
         ? []
         : [{ ticket, task }];
     });
-    const scopedTicketByMovidesk = new Map(scopedTickets.map((ticket) => [ticket.movideskId, ticket]));
-    const supportDivergences = linkedTasks.filter((task) => {
+    const ticketByMovidesk = new Map(allTicketLinks.map((ticket) => [ticket.movideskId, ticket]));
+    const supportDivergences = activeLinkedTasks.filter((task) => {
       if (!isSupportTask(task)) return false;
       const linkedIds = [
         ...(task.movideskTicket ? [task.movideskTicket] : []),
@@ -298,7 +321,7 @@ export class DataQualityService {
       ];
       if (!linkedIds.length) return false;
       return linkedIds.some((id) => {
-        const ticket = scopedTicketByMovidesk.get(id);
+        const ticket = ticketByMovidesk.get(id);
         return !ticket || (ticket.taskNumber !== null && ticket.taskNumber !== task.id);
       });
     });
@@ -407,10 +430,8 @@ export class DataQualityService {
     }
     const serviceCatalog = [...dynamicServiceCatalog.values()];
 
-    const needsServiceSuggestion = params.issue === "suspectedServiceMismatch";
     const serviceSuggestionByTicketId = new Map(
-      needsServiceSuggestion
-        ? scopedTickets.map((ticket) => [
+      scopedTickets.filter(isTicketOpen).map((ticket) => [
             ticket.id,
             suggestSimerService({
               subject: ticket.subject,
@@ -421,38 +442,37 @@ export class DataQualityService {
               serviceSecondLevel: ticket.serviceSecondLevel,
               serviceThirdLevel: ticket.serviceThirdLevel,
             }, serviceCatalog),
-          ] as const)
-        : [],
+          ] as const),
     );
 
-    const suspectedServiceMismatch = needsServiceSuggestion
-      ? scopedTickets.filter((ticket) => {
+    const suspectedServiceMismatch = scopedTickets.filter((ticket) => {
           if (!isTicketOpen(ticket)) return false;
           const suggestion = serviceSuggestionByTicketId.get(ticket.id);
           if (!suggestion || suggestion.confidence === "LOW") return false;
           const current = normalizeStatus(ticketServicePath(ticket).join(" » ") || ticket.service || "");
           const suggested = normalizeStatus(suggestion.path);
           return Boolean(current && current !== suggested && !suggested.includes(current));
-        })
-      : [];
+        });
 
     const derivedTicketIssues = ["danglingTaskTickets", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen", "clientMismatch", "supportLinkDivergence", "awaitingReturnWithoutCause", "awaitingReturnOverdue", "reopenedTickets", "excessiveOwnerHandoffs", "lowSatisfaction", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "withoutService", "genericSimerService", "suspectedServiceMismatch"];
     const matchesAzureIssue = (item: (typeof linkedTasks)[number]) => {
+      // A conclusão encerra a pendência operacional. O indicador de versão ausente
+      // fica disponível à parte como revisão de histórico, não como tarefa em aberto.
+      if (isTerminalTask(item.state) && params.issue !== "completedWithoutVersion") return false;
       if (params.issue === "duplicatedMovideskLinks") return Boolean(item.movideskTicket && duplicatedIds.includes(item.movideskTicket));
       if (params.issue === "withoutTicket") return !item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id);
       if (params.issue === "withoutClient") return !isSupportTask(item) && !item.client && !item.participantClients;
       if (params.issue === "completedWithoutVersion") return completedWithoutVersionTasks.some((task) => task.id === item.id);
       if (params.issue === "activeTaskWithVersion") return !isSupportTask(item) && !isTerminalTask(item.state) && Boolean(item.deliveredVersion);
       if (!params.issue) return (!item.movideskTicket && !item.participantMovideskTickets && !linkedTaskIdSet.has(item.id))
-        || (!isSupportTask(item) && !item.client && !item.participantClients) || !item.module || !item.assignedToName
-        || completedWithoutVersionTasks.some((task) => task.id === item.id);
+        || (!isSupportTask(item) && !item.client && !item.participantClients) || !item.module || !item.assignedToName;
       return true;
     };
     const azureSamples = params.issue === "supportLinkDivergence"
-      ? supportDivergences.slice(0, 100)
+      ? sampleLimit(supportDivergences, 100)
       : params.issue && derivedTicketIssues.includes(params.issue)
       ? []
-      : linkedTasks.filter(matchesAzureIssue).slice(0, 50);
+      : sampleLimit(linkedTasks.filter(matchesAzureIssue), 50);
 
     const toTicketSample = ({ ticket, task }: { ticket: (typeof scopedTickets)[number]; task: (typeof linkedTasks)[number] }) => ({
           id: ticket.id,
@@ -462,6 +482,8 @@ export class DataQualityService {
           client: ticket.client,
           module: null,
           assignedToName: ticket.owner,
+          taskAssignedToName: task.assignedToName,
+          createdByName: task.createdByName,
           movideskTicket: ticket.movideskId,
           registeredVersion: task.registeredVersion,
           deliveredVersion: task.deliveredVersion,
@@ -501,39 +523,39 @@ export class DataQualityService {
       source: "MOVIDESK" as const,
     });
     const samples = params.issue === "problemWithoutCause"
-      ? problemWithoutCause.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(problemWithoutCause, 100).map(toClassificationSample)
       : params.issue === "doubtWithoutReason"
-      ? doubtWithoutReason.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(doubtWithoutReason, 100).map(toClassificationSample)
       : params.issue === "withoutCategory"
-      ? withoutCategory.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(withoutCategory, 100).map(toClassificationSample)
       : params.issue === "awaitingReturnWithoutCause"
-      ? awaitingReturnWithoutCause.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(awaitingReturnWithoutCause, 100).map(toClassificationSample)
       : params.issue === "awaitingReturnOverdue"
-      ? awaitingReturnOverdue.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(awaitingReturnOverdue, 100).map(toClassificationSample)
       : params.issue === "reopenedTickets"
-      ? reopenedTickets.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(reopenedTickets, 100).map(toClassificationSample)
       : params.issue === "excessiveOwnerHandoffs"
-      ? excessiveOwnerHandoffs.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(excessiveOwnerHandoffs, 100).map(toClassificationSample)
       : params.issue === "lowSatisfaction"
-      ? lowSatisfaction.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(lowSatisfaction, 100).map(toClassificationSample)
       : params.issue === "suspectedClassification"
-      ? suspectedClassification.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(suspectedClassification, 100).map(toClassificationSample)
       : params.issue === "withoutService"
-      ? withoutService.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(withoutService, 100).map(toClassificationSample)
       : params.issue === "genericSimerService"
-      ? genericSimerService.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(genericSimerService, 100).map(toClassificationSample)
       : params.issue === "suspectedServiceMismatch"
-      ? suspectedServiceMismatch.slice(0, 100).map(toClassificationSample)
+      ? sampleLimit(suspectedServiceMismatch, 100).map(toClassificationSample)
       : params.issue === "ticketOpenTaskFinished"
-      ? ticketsAwaitingClosure.slice(0, 100).map(toTicketSample)
+      ? sampleLimit(ticketsAwaitingClosure, 100).map(toTicketSample)
       : params.issue === "ticketOpenTaskWithoutDelivery"
-      ? ticketsFinishedWithoutDelivery.slice(0, 100).map(toTicketSample)
+      ? sampleLimit(ticketsFinishedWithoutDelivery, 100).map(toTicketSample)
       : params.issue === "ticketClosedTaskOpen"
-      ? closedTicketsWithActiveTask.slice(0, 100).map(toTicketSample)
+      ? sampleLimit(closedTicketsWithActiveTask, 100).map(toTicketSample)
       : params.issue === "clientMismatch"
-      ? clientMismatches.slice(0, 100).map(toTicketSample)
+      ? sampleLimit(clientMismatches, 100).map(toTicketSample)
       : params.issue === "danglingTaskTickets"
-      ? danglingTickets.slice(0, 50).map((ticket) => ({
+      ? sampleLimit(danglingTickets, 50).map((ticket) => ({
           id: ticket.id,
           workItemType: "Ticket Movidesk",
           title: ticket.subject,
@@ -573,7 +595,7 @@ export class DataQualityService {
         suspectedClassification: suspectedClassification.length,
         withoutService: withoutService.length,
         genericSimerService: genericSimerService.length,
-        suspectedServiceMismatch: needsServiceSuggestion ? suspectedServiceMismatch.length : 0,
+        suspectedServiceMismatch: suspectedServiceMismatch.length,
         serviceCatalogSize: serviceCatalog.length,
         activeTaskWithVersion: activeLinkedTasks.filter((task) =>
           !isSupportTask(task) && Boolean(task.deliveredVersion?.trim()),
@@ -586,30 +608,37 @@ export class DataQualityService {
         types: ["Correção Clientes", "Evolução", "APOIO"],
       },
     };
-    const unfiltered = !types.length && !clients.length && !users.length && !params.issue && !params.search;
+    const trendFilterKey = JSON.stringify({
+      types: [...types].sort(),
+      clients: [...clients].sort(),
+      users: [...users].sort(),
+    });
+    const trendScopeKey = trendFilterKey === JSON.stringify({ types: [], clients: [], users: [] })
+      ? "SIMER_SUPPORT"
+      : `SIMER_${createHash("sha256").update(trendFilterKey).digest("hex").slice(0, 64)}`;
     let trend: Array<{ date: string; total: number; critical: number }> = [];
-    if (unfiltered) {
+    if (!params.search && !params.exportAll) {
       const snapshotDate = new Date();
       snapshotDate.setUTCHours(0, 0, 0, 0);
       await prisma.dataQualitySnapshot.upsert({
-        where: { scopeKey_snapshotDate: { scopeKey: "SIMER_SUPPORT", snapshotDate } },
-        create: { scopeKey: "SIMER_SUPPORT", snapshotDate, metrics: result.summary },
+        where: { scopeKey_snapshotDate: { scopeKey: trendScopeKey, snapshotDate } },
+        create: { scopeKey: trendScopeKey, snapshotDate, metrics: result.summary },
         update: { metrics: result.summary },
       });
-      const snapshots = await prisma.dataQualitySnapshot.findMany({
-        where: { scopeKey: "SIMER_SUPPORT" },
-        orderBy: { snapshotDate: "desc" },
-        take: 30,
-        select: { snapshotDate: true, metrics: true },
-      });
-      const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets", "completedWithoutVersion"];
-      trend = snapshots.reverse().map((snapshot) => {
-        const snapshotMetrics = (snapshot.metrics ?? {}) as Record<string, unknown>;
-        const total = coordinationMetricKeysForTrend.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
-        const critical = criticalKeys.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
-        return { date: snapshot.snapshotDate.toISOString(), total, critical };
-      });
     }
+    const snapshots = await prisma.dataQualitySnapshot.findMany({
+      where: { scopeKey: trendScopeKey },
+      orderBy: { snapshotDate: "desc" },
+      take: 30,
+      select: { snapshotDate: true, metrics: true },
+    });
+    const criticalKeys = ["ticketClosedTaskOpen", "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "danglingTaskTickets"];
+    trend = snapshots.reverse().map((snapshot) => {
+      const snapshotMetrics = (snapshot.metrics ?? {}) as Record<string, unknown>;
+      const total = coordinationMetricKeysForTrend.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+      const critical = criticalKeys.reduce((sum, key) => sum + Number(snapshotMetrics[key] ?? 0), 0);
+      return { date: snapshot.snapshotDate.toISOString(), total, critical };
+    });
 
     const response = { ...result, trend };
     dataQualityCache.set(cacheKey, { expiresAt: Date.now() + 120_000, value: response });
@@ -620,6 +649,6 @@ export class DataQualityService {
 const coordinationMetricKeysForTrend = [
   "ticketOpenTaskFinished", "ticketOpenTaskWithoutDelivery", "ticketClosedTaskOpen",
   "danglingTaskTickets", "reopenedTickets", "excessiveOwnerHandoffs", "withoutTicket",
-  "withoutClient", "completedWithoutVersion", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "genericSimerService",
+  "withoutClient", "problemWithoutCause", "doubtWithoutReason", "withoutCategory", "suspectedClassification", "genericSimerService",
 ];
 

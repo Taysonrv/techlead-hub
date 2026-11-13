@@ -7,10 +7,13 @@ const serviceOf=(row:any)=>row.serviceThirdLevel||row.serviceSecondLevel||row.se
 const percent=(part:number,total:number)=>total?Math.round(part/total*1000)/10:0;
 
 export class OperationalIntelligenceService {
-  async overview(days=90){
+  async overview(days=90, period?: "month"){
     const safeDays=Math.max(30,Math.min(days,730));
-    const since=new Date(); since.setDate(since.getDate()-safeDays);
-    const previousSince=new Date(since); previousSince.setDate(previousSince.getDate()-safeDays);
+    const now=new Date();
+    const since=period==="month"?new Date(now.getFullYear(),now.getMonth(),1):new Date(now);
+    if(period!=="month") since.setDate(since.getDate()-safeDays);
+    const effectiveDays=period==="month"?now.getDate():safeDays;
+    const previousSince=new Date(since); previousSince.setDate(previousSince.getDate()-effectiveDays);
 
     const [tickets,previous,azure,lastAzureRun,lastImportRun,lastCatalog,lastSurvey]=await Promise.all([
       prisma.ticket.findMany({where:scopedTicketWhere({AND:[{AND:[ticketOperationalScope(),{NOT:{OR:[{service:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIAGRI WEB",mode:"insensitive"}},{ownerTeam:{contains:"SIAGRI WEB",mode:"insensitive"}}]}},{OR:[{service:{contains:"SIMER",mode:"insensitive"}},{serviceFirstLevel:{contains:"SIMER",mode:"insensitive"}},{serviceSecondLevel:{contains:"SIMER",mode:"insensitive"}},{serviceThirdLevel:{contains:"SIMER",mode:"insensitive"}},{ownerTeam:{contains:"SIMER",mode:"insensitive"}}]}]},{isDeleted:false,createdDate:{gte:since}}]}),select:{movideskId:true,subject:true,client:true,category:true,cause:true,service:true,serviceFirstLevel:true,serviceSecondLevel:true,serviceThirdLevel:true,taskNumber:true,registeredVersion:true,deliveredVersion:true,createdDate:true}}),
@@ -46,7 +49,7 @@ export class OperationalIntelligenceService {
     const classified=tickets.filter(x=>x.cause||x.category).length;
     const versioned=tickets.filter(x=>x.deliveredVersion||x.registeredVersion).length;
     return {
-      generatedAt:new Date().toISOString(),periodDays:safeDays,
+      generatedAt:now.toISOString(),periodDays:effectiveDays,
       scope:{name:"Carteira SIMER",description:"Produto SIMER nos clientes oficiais da carteira, excluindo outras soluções como SIAGRI WEB."},
       observability:{
         sources:[

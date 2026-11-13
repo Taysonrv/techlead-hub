@@ -9,18 +9,38 @@ export type LocalNotificationPreferences = {
 };
 
 const KEY = "techlead-hub:notification-preferences";
+const DESKTOP_ALERTS_KEY_PREFIX = "techlead-hub:desktop-alerts:";
 export const DEFAULT_LOCAL_NOTIFICATION_PREFERENCES: LocalNotificationPreferences = {
   sound: true, chat: true, operation: true, appVersion: true, simerVersion: true, azureCompleted: true, azureUpdated: true,
 };
 
 export function getLocalNotificationPreferences(): LocalNotificationPreferences {
-  try { return { ...DEFAULT_LOCAL_NOTIFICATION_PREFERENCES, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; }
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(KEY) || "{}");
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return { ...DEFAULT_LOCAL_NOTIFICATION_PREFERENCES };
+    const values = stored as Record<string, unknown>;
+    return Object.fromEntries(Object.entries(DEFAULT_LOCAL_NOTIFICATION_PREFERENCES).map(([key, fallback]) => [key, typeof values[key] === "boolean" ? values[key] : fallback])) as LocalNotificationPreferences;
+  }
   catch { return DEFAULT_LOCAL_NOTIFICATION_PREFERENCES; }
 }
 
 export function saveLocalNotificationPreferences(value: LocalNotificationPreferences) {
-  localStorage.setItem(KEY, JSON.stringify(value));
+  try { localStorage.setItem(KEY, JSON.stringify(value)); } catch { /* armazenamento local opcional */ }
   window.dispatchEvent(new CustomEvent("techlead-hub:notification-preferences", { detail: value }));
+}
+
+export function getDesktopAlertsEnabled(userId: number | null | undefined): boolean {
+  if (!userId) return false;
+  try {
+    const stored = localStorage.getItem(`${DESKTOP_ALERTS_KEY_PREFIX}${userId}`);
+    return stored === null ? true : stored === "true";
+  } catch { return true; }
+}
+
+export function saveDesktopAlertsEnabled(userId: number | null | undefined, enabled: boolean) {
+  if (!userId) return;
+  try { localStorage.setItem(`${DESKTOP_ALERTS_KEY_PREFIX}${userId}`, String(enabled)); } catch { /* armazenamento local opcional */ }
+  window.dispatchEvent(new CustomEvent("techlead-hub:desktop-alert-preference", { detail: { userId, enabled } }));
 }
 
 export type ChatSoundEffect = "chat" | "system" | "sent" | "online" | "mention" | "nudge" | "sticker";

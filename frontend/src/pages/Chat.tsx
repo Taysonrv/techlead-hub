@@ -1,17 +1,35 @@
-import { AddCommentOutlined, ForumOutlined, SendRounded, EmojiEmotionsOutlined, CelebrationOutlined, NotificationsActiveOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, MoreHorizOutlined, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, AttachFileRounded, DownloadRounded, CleaningServicesOutlined, GroupsOutlined, PersonOutlineRounded, InfoOutlined, OpenInNewOutlined, BoltOutlined, AssignmentTurnedInOutlined, PushPinOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
-import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import { ArrowBackRounded, ForumOutlined, ReplyOutlined, CloseOutlined, SearchOutlined, Circle, DeleteOutlineRounded, StarOutlineRounded, VolumeOffOutlined, GroupsOutlined, PersonOutlineRounded, BoltOutlined, AssignmentTurnedInOutlined, AlternateEmailOutlined, KeyboardArrowDownRounded } from "@mui/icons-material";
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, FormControlLabel, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem, Paper, Popover, Skeleton, Snackbar, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api, getAccessToken, getApiBaseUrl } from "../services/api";
+import { api } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { playNotificationSound } from "../utils/notificationSound";
+import { getDesktopAlertsEnabled, getLocalNotificationPreferences, playNotificationSound } from "../utils/notificationSound";
+import { IncidentActionsPanel } from "../components/IncidentActionsPanel";
+import { ChatHistorySearch } from "../components/ChatHistorySearch";
+import { IncidentContextSummary } from "../components/chat/IncidentContextSummary";
+import { IncidentWorkSummary } from "../components/chat/IncidentWorkSummary";
+import { SharedFilesPanel } from "../components/chat/SharedFilesPanel";
+import { ConversationListHeader } from "../components/chat/ConversationListHeader";
+import { ConversationListSearch } from "../components/chat/ConversationListSearch";
+import { ChannelList } from "../components/chat/ChannelList";
+import { ConversationHeader } from "../components/chat/ConversationHeader";
+import { MessageList } from "../components/chat/MessageList";
+import { Composer } from "../components/chat/Composer";
+import { normalizeChatChannels, useChannelDirectory } from "../components/chat/hooks/useChannelDirectory";
+import { useMessageView } from "../components/chat/hooks/useMessageView";
+import { useChatRealtime } from "../components/chat/hooks/useChatRealtime";
+import { useChatPresence } from "../components/chat/hooks/useChatPresence";
+import { useChatReadReceipts } from "../components/chat/hooks/useChatReadReceipts";
+import { useChatTyping } from "../components/chat/hooks/useChatTyping";
+import { useChatHistory } from "../components/chat/hooks/useChatHistory";
+import { useChatSend } from "../components/chat/hooks/useChatSend";
+import { useChatAttachment } from "../components/chat/hooks/useChatAttachment";
 
 
-type Person = { id: number; name: string; username: string; role: string };
-type Message = { id: number; content: string; createdAt: string; parentId?: number | null; author: Person };
-type Channel = { id: number; name: string; type: string; description?: string | null; clientName?: string | null; unread: number; messages: Message[]; members?: Array<{ user: Person }> };
-type Presence = { userId: number; status: string; effectiveStatus: "ONLINE" | "AWAY" | "BUSY" | "OFFLINE"; statusMessage?: string | null; lastSeenAt: string; name: string; username: string };
-type RealtimeSnapshot = { presence: Presence[]; typing: Array<{ channelId: number; userId: number; name: string }>; latestMessage: { id: number; channelId: number; authorId: number } | null };
+import { presenceColor } from "../components/chat/chatTypes";
+import type { Person, Message, Channel, Presence, RealtimeSnapshot } from "../components/chat/chatTypes";
 
 export function Chat() {
   const { user } = useAuth();
@@ -20,17 +38,13 @@ export function Chat() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [participants, setParticipants] = useState<Person[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(() => { const value = Number(new URLSearchParams(window.location.search).get("channel")); return Number.isFinite(value) && value > 0 ? value : null; });
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [mobileConversationOpen, setMobileConversationOpen] = useState(() => Boolean(new URLSearchParams(window.location.search).get("channel")));
   const [content, setContent] = useState("");
+  const notifyTyping = useChatTyping(selectedId);
   const [quickActionsAnchor, setQuickActionsAnchor] = useState<HTMLElement | null>(null);
-  const [loading, setLoading] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(true);
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
-  const [sending, setSending] = useState(false);
-  const messageRequest = useRef<AbortController | null>(null);
-  const sendingRef = useRef(false);
-  const typingSentAt = useRef(0);
   const [error, setError] = useState("");
+  const { availability, cycleAvailability } = useChatPresence(setError);
   const [createOpen, setCreateOpen] = useState(false);
   const [channelName, setChannelName] = useState("");
   const [memberIds, setMemberIds] = useState<number[]>([]);
@@ -48,59 +62,56 @@ export function Chat() {
   const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem("techlead-chat-sound") !== "off");
   const [directOpen, setDirectOpen] = useState(false);
   const [directSearch, setDirectSearch] = useState("");
+  const contextRequestStarted = useRef(false);
   const [pendingShare, setPendingShare] = useState<{ label: string; recordId?: number; title: string; client?: string | null; status?: string | null; path: string } | null>(() => {
     const raw = new URLSearchParams(window.location.search).get("share");
     if (!raw) return null;
     try { return JSON.parse(raw); } catch { return null; }
   });
   const [openingDirectId, setOpeningDirectId] = useState<number | null>(null);
-  const typingTimer = useRef<number | null>(null);
-  const lastRealtimeMessageId = useRef<number | null>(null);
   const [presence, setPresence] = useState<Presence[]>([]);
   const [remoteTyping, setRemoteTyping] = useState<RealtimeSnapshot["typing"]>([]);
-  const [availability, setAvailability] = useState<"ONLINE" | "AWAY" | "BUSY">(() => (localStorage.getItem("techlead-chat-status") as "ONLINE" | "AWAY" | "BUSY") || "ONLINE");
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [conversationMenuAnchor, setConversationMenuAnchor] = useState<HTMLElement | null>(null);
   const [deleteConversationOpen, setDeleteConversationOpen] = useState(false);
   const [deletingConversation, setDeletingConversation] = useState(false);
   const [maintenanceRunning, setMaintenanceRunning] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const theme = useTheme();
+  const compactContext = useMediaQuery(theme.breakpoints.down("lg"));
+  const wideContext = useMediaQuery(theme.breakpoints.up("xl"));
+  const [widePanelVisible, setWidePanelVisible] = useState(true);
   const [conversationInfoOpen, setConversationInfoOpen] = useState(false);
+  const [incidentActionsOpen, setIncidentActionsOpen] = useState(false);
+  const [historySearchOpen, setHistorySearchOpen] = useState(false);
   const [teamPanelOpen, setTeamPanelOpen] = useState(true);
   const [onlineAnchor, setOnlineAnchor] = useState<HTMLElement | null>(null);
-  const [statusMessage] = useState(() => localStorage.getItem("techlead-chat-status-message") || "");
   const [incomingPopup, setIncomingPopup] = useState<{ channelId: number; channelName: string; authorName: string; preview: string } | null>(null);
   const previousChannelState = useRef<Map<number, { unread: number; lastMessageId: number | null }>>(new Map());
+  const markRead = useChatReadReceipts({ selectedId, onRead: (channelId) => {
+    setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
+    window.dispatchEvent(new Event("techlead-hub:chat-read"));
+  } });
+  const { messages, setMessages, loading, hasOlder, loadingOlder, showJumpToLatest, setShowJumpToLatest, loadMessages, loadOlder, handleMessagesScroll: handleHistoryScroll, jumpToLatest } = useChatHistory({ selectedId, messagesRef, markRead, setError });
+  const handleMessagesScroll = useCallback(() => handleHistoryScroll(messageSearch), [handleHistoryScroll, messageSearch]);
+  const { sendAttachment, uploadingAttachment } = useChatAttachment({ selectedId, attachmentInputRef, refreshMessages: loadMessages, setError });
+  const { send, sendQuick, sending } = useChatSend({ selectedId, content, replyTo, setMessages, setContent, setReplyTo, setShowJumpToLatest, setError });
+  useEffect(() => {
+    setReplyTo(null);
+    setContent("");
+    setMessageSearch("");
+  }, [selectedId]);
   const selectedIdRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
-  useEffect(() => () => { if (typingTimer.current) window.clearTimeout(typingTimer.current); }, []);
 
-  const selected = useMemo(() => channels.find((channel) => channel.id === selectedId) ?? null, [channels, selectedId]);
+  const { selected, sidebarChannels, totalUnread } = useChannelDirectory({ channels, selectedId, conversationSearch, favorites });
+  const showSidePanel = Boolean(selected) && (conversationInfoOpen || selected?.type === "CONTEXT" || (selected?.type === "TEAM" && teamPanelOpen) || (wideContext && widePanelVisible));
+  const selectConversation = useCallback((channelId: number) => { setSelectedId(channelId); setMobileConversationOpen(true); }, []);
+  const backToConversations = useCallback(() => { setMobileConversationOpen(false); setConversationInfoOpen(false); }, []);
   const selectedPeer = useMemo(() => selected?.type === "DIRECT" ? selected.members?.map((member) => member.user).find((person) => person.id !== user?.id) : null, [selected, user?.id]);
   const selectedPresence = selectedPeer ? presence.find((item) => item.userId === selectedPeer.id) : null;
   const typingNames = remoteTyping.filter((item) => item.channelId === selectedId).map((item) => item.name);
-  const visibleChannels = useMemo(() => {
-    const query = conversationSearch.trim().toLowerCase();
-    return channels.filter((channel) => {
-      if (!query) return true;
-      const peerNames = channel.members?.map((member) => member.user.name).join(" ") ?? "";
-      return [channel.name, channel.description, channel.clientName, peerNames]
-        .some((value) => value?.toLowerCase().includes(query));
-    });
-  }, [channels, conversationSearch]);
-  const pinState = useMemo(() => {
-    const ids = new Set<number>();
-    messages.forEach((message) => {
-      if (message.content.startsWith("[chat-pin]")) ids.add(Number(message.content.slice(10)));
-      if (message.content.startsWith("[chat-unpin]")) ids.delete(Number(message.content.slice(12)));
-    });
-    return ids;
-  }, [messages]);
-  const visibleMessages = useMemo(() => messages.filter((message) => !message.content.startsWith("[chat-pin]") && !message.content.startsWith("[chat-unpin]") && (!messageSearch.trim() || message.content.toLowerCase().includes(messageSearch.toLowerCase()))), [messages, messageSearch]);
-  const pinnedMessages = useMemo(() => visibleMessages.filter((message) => pinState.has(message.id)).slice(-4).reverse(), [visibleMessages, pinState]);
-  const coordinationHighlights = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ALINHAMENTO \/ DECISÃO|ESCALONAMENTO PARA COORDENAÇÃO/.test(message.content)).slice(-5).reverse(), [visibleMessages]);
-  const channelPendencies = useMemo(() => visibleMessages.filter((message) => /PRIORIDADE DO TIME|ESCALONAMENTO PARA COORDENAÇÃO|PASSAGEM DE TURNO/.test(message.content)).slice(-4).reverse(), [visibleMessages]);
+  const { pinState, visibleMessages, pinnedMessages, coordinationHighlights, channelPendencies } = useMessageView(messages, messageSearch);
   const selectedOnlineCount = useMemo(() => selected?.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus === "ONLINE").length ?? 0, [selected, presence]);
   const participantPresence = useMemo(() => participants
     .filter((person) => person.id !== user?.id)
@@ -117,50 +128,10 @@ export function Chat() {
       const weight = (status: Presence["effectiveStatus"] | undefined) => status === "BUSY" ? 0 : 1;
       return weight(a.presence?.effectiveStatus)-weight(b.presence?.effectiveStatus) || a.person.name.localeCompare(b.person.name, "pt-BR");
     }), [participantPresence]);
-  const totalUnread = useMemo(() => channels.reduce((sum, channel) => sum + channel.unread, 0), [channels]);
-  const sortedVisibleChannels = useMemo(() => visibleChannels.slice().sort((a, b) => {
-    const group = (channel: Channel) => favorites.includes(channel.id) ? 0 : channel.type === "DIRECT" ? 1 : 2;
-    return group(a) - group(b) || b.unread - a.unread || ((b.messages?.[b.messages.length - 1]?.id ?? 0) - (a.messages?.[a.messages.length - 1]?.id ?? 0));
-  }), [visibleChannels, favorites]);
-  const sidebarChannels = useMemo(() => {
-    if (!selected || sortedVisibleChannels.some((channel) => channel.id === selected.id)) return sortedVisibleChannels;
-    return [selected, ...sortedVisibleChannels];
-  }, [selected, sortedVisibleChannels]);
-
   const loadChannels = useCallback(async () => {
     const response = await api.get<{ channels: Channel[] }>("/chat/channels");
     const rawChannels = Array.isArray(response.data.channels) ? response.data.channels : [];
-    const directByPeer = new Map<number, Channel>();
-    const nonDirect: Channel[] = [];
-    rawChannels.forEach((channel) => {
-      if (channel.type !== "DIRECT") { nonDirect.push(channel); return; }
-      const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-      if (!peerId) { nonDirect.push(channel); return; }
-      const existing = directByPeer.get(peerId);
-      if (!existing) { directByPeer.set(peerId, channel); return; }
-      const existingLatest = existing.messages?.[existing.messages.length - 1]?.id ?? 0;
-      const currentLatest = channel.messages?.[channel.messages.length - 1]?.id ?? 0;
-      if (currentLatest > existingLatest || (currentLatest === existingLatest && channel.unread > existing.unread)) directByPeer.set(peerId, channel);
-    });
-    let nextChannels = [...directByPeer.values(), ...nonDirect];
-
-    // Nunca deixe a conversa atualmente aberta desaparecer da coluna lateral.
-    // Em DIRECTs legados/duplicados, o canal selecionado pode não ser o canônico
-    // escolhido pelo dedupe; nesse caso substituímos o representante daquele par
-    // pelo canal efetivamente aberto.
-    const activeId = selectedIdRef.current;
-    const activeRaw = activeId ? rawChannels.find((channel) => channel.id === activeId) : undefined;
-    if (activeRaw && !nextChannels.some((channel) => channel.id === activeRaw.id)) {
-      if (activeRaw.type === "DIRECT") {
-        const activePeerId = activeRaw.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-        nextChannels = nextChannels.filter((channel) => {
-          if (channel.type !== "DIRECT" || !activePeerId) return true;
-          const peerId = channel.members?.map((member) => member.user.id).find((id) => id !== user?.id);
-          return peerId !== activePeerId;
-        });
-      }
-      nextChannels.unshift(activeRaw);
-    }
+    const { channels: nextChannels, directByPeer } = normalizeChatChannels(rawChannels, user?.id, selectedIdRef.current);
     const requestedId = Number(searchParams.get("channel"));
     const requestedChannel = rawChannels.find((channel) => channel.id === requestedId);
     let requestedTargetId: number | null = null;
@@ -212,25 +183,6 @@ export function Chat() {
     }
   }, [searchParams, setSearchParams, user?.id]);
 
-  const loadMessages = useCallback(async (channelId: number, quiet = false) => {
-    messageRequest.current?.abort();
-    const controller = new AbortController();
-    messageRequest.current = controller;
-    try {
-      if (!quiet) setLoading(true);
-      const response = await api.get<{ messages: Message[] }>(`/chat/channels/${channelId}/messages`, { signal: controller.signal });
-      if (controller.signal.aborted || selectedIdRef.current !== channelId) return;
-      setMessages(response.data.messages);
-      setChannels((current) => current.map((channel) => channel.id === channelId ? { ...channel, unread: 0 } : channel));
-      window.dispatchEvent(new Event("techlead-hub:chat-read"));
-      setError("");
-    } catch (requestError: any) {
-      if (!controller.signal.aborted && !quiet) setError(requestError?.response?.data?.error || "Não foi possível carregar a conversa.");
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     let active = true;
     const bootstrap = async () => {
@@ -242,124 +194,67 @@ export function Chat() {
       if (participantsResult.status === "fulfilled") setParticipants(participantsResult.value.data.participants);
       if (channelsResult.status === "rejected") {
         const requestError = channelsResult.reason as { response?: { data?: { error?: string } } };
-        if (!channels.length) setError(requestError?.response?.data?.error || "Não foi possível atualizar a lista de conversas.");
-      } else {
-        setError("");
+        setError(requestError?.response?.data?.error || "Não foi possível atualizar a lista de conversas.");
       }
       setChannelsLoading(false);
     };
     void bootstrap();
     return () => { active = false; };
-  }, [loadChannels, channels.length]);
+  }, [loadChannels]);
   useEffect(() => {
     if (!pendingShare) return;
     setDirectOpen(true);
   }, [pendingShare]);
 
   useEffect(() => {
-    setMessages([]);setReplyTo(null);setContent("");setMessageSearch("");setShowJumpToLatest(false);
-    if (!selectedId) { setLoading(false); return; }
-    void loadMessages(selectedId);
-    return () => { messageRequest.current?.abort(); };
-  }, [loadMessages, selectedId]);
-  useEffect(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    const nearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 140;
-    if (nearBottom || !showJumpToLatest) {
-      container.scrollTo({ top: container.scrollHeight, behavior: "auto" });
-      setShowJumpToLatest(false);
-    }
-  }, [messages, selectedId, showJumpToLatest]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    setShowJumpToLatest(container.scrollHeight - container.scrollTop - container.clientHeight > 180);
-  }, []);
-
-  const jumpToLatest = useCallback(() => {
-    const container = messagesRef.current;
-    if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-    setShowJumpToLatest(false);
-  }, []);
+    const ticket = searchParams.get("contextTicket");
+    const task = searchParams.get("contextTask");
+    if ((!ticket && !task) || contextRequestStarted.current) return;
+    contextRequestStarted.current = true;
+    const contextType = ticket ? "TICKET" : "TASK";
+    const contextId = ticket || task;
+    void api.post<Channel>("/chat/context", { contextType, contextId })
+      .then(async ({ data: channel }) => {
+        setSelectedId(channel.id); setMobileConversationOpen(true);
+        await loadChannels();
+        setError("");
+      })
+      .catch((requestError) => {
+        setError(requestError?.response?.data?.error || "Não foi possível abrir a sala de incidente.");
+      })
+      .finally(() => {
+        const next = new URLSearchParams(searchParams);
+        ["contextTicket", "contextTask", "contextTitle", "contextClient"].forEach((key) => next.delete(key));
+        setSearchParams(next, { replace: true });
+      });
+  }, [searchParams, setSearchParams, loadChannels]);
 
   useEffect(() => {
     const unread = channels.reduce((sum, channel) => sum + channel.unread, 0);
-    if (unread > previousUnread.current && soundEnabled) {
-      playNotificationSound("chat");
-      if (document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
+    if (unread > previousUnread.current) {
+      const notificationPreferences = getLocalNotificationPreferences();
+      if (soundEnabled && notificationPreferences.sound && notificationPreferences.chat) playNotificationSound("chat");
+      if (notificationPreferences.chat && getDesktopAlertsEnabled(user?.id) && document.visibilityState !== "visible") {
+        const fallback=()=>{if("Notification" in window&&Notification.permission==="granted"){
+          const notice=new Notification("TechLead Hub",{body:"Você recebeu uma nova mensagem no chat.",silent:!notificationPreferences.sound});
+          notice.onclick=()=>window.focus();window.setTimeout(()=>notice.close(),8_000);
+        }};
+        if(window.techLeadHub?.notifications){
+          void window.techLeadHub.notifications.show({key:`chat-unread:${user?.id}:${Date.now()}`,title:"TechLead Hub",body:"Você recebeu uma nova mensagem no chat.",silent:!notificationPreferences.sound})
+            .then(shown=>{if(!shown)fallback();}).catch(fallback);
+        }else fallback();
+      }
     }
     previousUnread.current = unread;
-  }, [channels, soundEnabled]);
+  }, [channels, soundEnabled, user?.id]);
 
-  useEffect(() => {
-    let stopped = false;
-    const controller = new AbortController();
-    const connect = async () => {
-      let retryMs = 1800;
-      while (!stopped) {
-        try {
-          const token = getAccessToken();
-          const base = getApiBaseUrl();
-          const url = new URL(`${base.replace(/\/$/, "")}/chat/events`, window.location.origin);
-          const response = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: controller.signal });
-          if (response.status === 429) {
-            const retryAfter = Number(response.headers.get("Retry-After") ?? 5);
-            await new Promise((resolve) => window.setTimeout(resolve, Math.max(5, Number.isFinite(retryAfter) ? retryAfter : 5) * 1_000));
-            continue;
-          }
-          if (!response.ok || !response.body) throw new Error("stream indisponível");
-          retryMs = 1800;
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          while (!stopped) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const blocks = buffer.split("\n\n"); buffer = blocks.pop() ?? "";
-            for (const block of blocks) {
-              const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
-              if (!dataLine) continue;
-              const snapshot = JSON.parse(dataLine.slice(6)) as RealtimeSnapshot;
-              setPresence(snapshot.presence);
-              setRemoteTyping(snapshot.typing);
-              const latestId = snapshot.latestMessage?.id ?? null;
-              if (lastRealtimeMessageId.current !== null && latestId !== lastRealtimeMessageId.current) {
-                void loadChannels().catch(() => undefined);
-                if (selectedId && snapshot.latestMessage?.channelId === selectedId) void loadMessages(selectedId, true);
-              }
-              lastRealtimeMessageId.current = latestId;
-            }
-          }
-          // Um stream finalizado normalmente também exige intervalo antes de reconectar.
-          if (!stopped && !controller.signal.aborted) {
-            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
-            retryMs = Math.min(retryMs * 2, 30_000);
-          }
-        } catch {
-          if (!stopped && !controller.signal.aborted) {
-            await new Promise((resolve) => window.setTimeout(resolve, retryMs));
-            retryMs = Math.min(retryMs * 2, 30_000);
-          }
-        }
-      }
-    };
-    void connect();
-    return () => { stopped = true; controller.abort(); };
-  }, [loadChannels, loadMessages, selectedId]);
-
-  useEffect(() => {
-    const sendPresence = (status = document.visibilityState === "hidden" ? "AWAY" : availability) =>
-      api.post("/chat/presence", { status, statusMessage }).catch(() => undefined);
-    void sendPresence();
-    const timer = window.setInterval(() => void sendPresence(), 25_000);
-    const visibility = () => void sendPresence();
-    document.addEventListener("visibilitychange", visibility);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visibility); };
-  }, [availability, statusMessage]);
+  useChatRealtime({
+    selectedId,
+    onChannelsChanged: loadChannels,
+    onMessagesChanged: (channelId) => loadMessages(channelId, true),
+    setPresence,
+    setRemoteTyping,
+  });
 
   async function openDirect(person: Person) {
     if (openingDirectId) return;
@@ -369,7 +264,7 @@ export function Chat() {
       channel.members?.some((member) => member.user.id === user?.id),
     );
     if (existing) {
-      setSelectedId(existing.id);
+      setSelectedId(existing.id); setMobileConversationOpen(true);
       setDirectOpen(false);
       setError("");
       if (pendingShare) {
@@ -387,7 +282,7 @@ export function Chat() {
       setOpeningDirectId(person.id);
       const response = await api.post<Channel>(`/chat/direct/${person.id}`);
       setChannels((current) => current.some((item) => item.id === response.data.id) ? current : [response.data, ...current]);
-      setSelectedId(response.data.id);
+      setSelectedId(response.data.id); setMobileConversationOpen(true);
       setDirectOpen(false);
       setError("");
       if (pendingShare) {
@@ -421,26 +316,13 @@ export function Chat() {
         memberIds,
       });
       await loadChannels();
-      setSelectedId(response.data.id);
+      setSelectedId(response.data.id); setMobileConversationOpen(true);
       setCreateOpen(false);
       setChannelName("");
       setMemberIds([]);
     } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível criar o canal."); }
   }
 
-  async function sendAttachment(file: File) {
-    if (!selectedId) return;
-    if (file.size > 8 * 1024 * 1024) { setError("O anexo deve ter no máximo 8 MB."); return; }
-    setUploadingAttachment(true); setError("");
-    try {
-      const data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader(); reader.onload = () => resolve(String(reader.result ?? "")); reader.onerror = () => reject(new Error("Falha ao ler o arquivo.")); reader.readAsDataURL(file);
-      });
-      await api.post(`/chat/channels/${selectedId}/attachments`, { name: file.name, mimeType: file.type || "application/octet-stream", data });
-      await loadMessages(selectedId);
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar o anexo."); }
-    finally { setUploadingAttachment(false); if (attachmentInputRef.current) attachmentInputRef.current.value = ""; }
-  }
 
   function openSharedRecord(card: { type: string; id?: number; path?: string }) {
     const id = Number(card.id);
@@ -464,13 +346,6 @@ export function Chat() {
       }
     }
     if (card.path) navigate(card.path);
-  }
-
-  function attachmentInfo(content: string) {
-    if (!content.startsWith("[anexo] ")) return null;
-    const parts = content.slice(8).split("|"); if (parts.length < 4) return null;
-    const [name, mimeType, size, ...base64] = parts;
-    return { name, mimeType, size: Number(size), href: `data:${mimeType};base64,${base64.join("|")}` };
   }
 
   async function deleteConversation() {
@@ -520,25 +395,6 @@ export function Chat() {
     }
   }
 
-  async function send() {
-    const text = content.trim();
-    if (!selectedId || !text || sendingRef.current) return;
-    const channelId=selectedId;
-    sendingRef.current=true;
-    messageRequest.current?.abort();
-    try {
-      setSending(true);
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: text, parentId: replyTo?.id ?? null });
-      if (selectedIdRef.current !== channelId) return;
-      setMessages((current) => current.some(item=>item.id===response.data.id)?current:[...current, response.data]);
-      setShowJumpToLatest(false);
-      setContent("");
-      setReplyTo(null);
-      setError("");
-    } catch (requestError: any) { setError(requestError?.response?.data?.error || "Não foi possível enviar a mensagem."); }
-    finally { sendingRef.current=false;setSending(false); }
-  }
-
   const togglePinnedMessage = useCallback(async (messageId: number) => {
     if (!selectedId) return;
     try {
@@ -564,41 +420,25 @@ export function Chat() {
   const sendEmoji = useCallback(async (emoji: string) => {
     if (!selectedId || sending) return;
     setEmojiAnchor(null);
-    launchEmojiFx(emoji);
-    setSending(true);
-    try {
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: emoji });
-      setMessages((current) => [...current, response.data]);
+    const success = await sendQuick(emoji);
+    if (success) {
+      launchEmojiFx(emoji);
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-    } catch { setError("Não foi possível enviar o emoji."); }
-    finally { setSending(false); }
-  }, [selectedId, sending, launchEmojiFx]);
+    }
+  }, [selectedId, sending, sendQuick, launchEmojiFx]);
   const sendSticker = useCallback(async (sticker: string) => {
     if (!selectedId || sending) return;
     setStickersOpen(false);
-    launchStickerFx(sticker);
-    setSending(true);
-    try {
-      const response = await api.post<Message>(`/chat/channels/${selectedId}/messages`, { content: sticker });
-      setMessages((current) => [...current, response.data]);
+    const success = await sendQuick(sticker);
+    if (success) {
+      launchStickerFx(sticker);
       if (soundEnabled) window.setTimeout(() => playNotificationSound("sent"), 180);
       requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
-    } catch { setError("Não foi possível enviar a figurinha."); }
-    finally { setSending(false); }
-  }, [selectedId, sending, launchStickerFx, soundEnabled]);
+    }
+  }, [selectedId, sending, sendQuick, launchStickerFx, soundEnabled]);
   const append = (value: string) => setContent((current) => current ? `${current} ${value}` : value);
 
-  return <Stack spacing={.9} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .75, sm: 1, md: 1.15, xl: 1.35 }, pb: { xs: .75, md: 1.1 }, pt: { xs: .75, md: 1.05 }, boxSizing: "border-box", bgcolor: "background.default" }}>
-    <Paper elevation={0} sx={{ flexShrink: 0, minHeight: 68, px: 1.8, py: .8, borderRadius: 4, border: "1px solid", borderColor: "divider", borderLeft: "4px solid", borderLeftColor: "primary.main", overflow: "hidden", position: "relative", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(115deg,rgba(10,43,55,.96),rgba(16,34,55,.98) 56%,rgba(19,28,43,.98))" : "linear-gradient(115deg,#f2fffa,#f7fbff 58%,#f3f7fd)", boxShadow: (theme) => theme.palette.mode === "dark" ? "0 14px 34px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.025)" : "0 14px 34px rgba(15,23,42,.075)" }}>
-      <Stack direction="row" spacing={1.35} sx={{ alignItems: "center", minWidth: 0, pr: { md: 28 } }}>
-        <Box sx={{ width: 40, height: 40, borderRadius: 2.4, display: "grid", placeItems: "center", flexShrink: 0, color: "primary.main", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.08)" : "rgba(24,199,122,.07)", border: "1px solid rgba(24,199,122,.24)", boxShadow: "0 8px 22px rgba(24,199,122,.10)" }}><ForumOutlined /></Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography variant="overline" sx={{ display: "block", mb: .15, color: "primary.main", fontSize: ".58rem", lineHeight: 1, letterSpacing: ".14em", fontWeight: 950 }}>COLABORAÇÃO</Typography>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center", flexWrap: "wrap", rowGap: .5 }}><Typography sx={{ fontWeight: 950, fontSize: "1.08rem", lineHeight: 1.05, letterSpacing: "-.025em", whiteSpace: "nowrap" }}>Hub de Conversas</Typography><Chip size="small" label={{ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado" }[availability]} color={availability === "BUSY" ? "error" : availability === "AWAY" ? "warning" : "success"} onClick={() => { const next = availability === "ONLINE" ? "AWAY" : availability === "AWAY" ? "BUSY" : "ONLINE"; setAvailability(next); localStorage.setItem("techlead-chat-status", next); }} sx={{ height: 22, fontWeight: 850 }} /><Tooltip title="Ver quem está online"><Chip size="small" clickable icon={<GroupsOutlined sx={{ fontSize: "15px !important" }} />} label={`${onlinePeople.length} online`} color={onlinePeople.length ? "success" : "default"} variant="outlined" onClick={(event) => setOnlineAnchor(event.currentTarget)} sx={{ height: 22, fontWeight: 850 }} /></Tooltip></Stack>
-          <Stack direction="row" spacing={.8} sx={{ alignItems: "center", minWidth: 0 }}><Typography variant="caption" color="text.secondary" noWrap>Mensagens, presença e colaboração em tempo real</Typography>{statusMessage && <Typography variant="caption" color="text.secondary" noWrap sx={{ opacity: .75 }}>· {statusMessage}</Typography>}</Stack>
-        </Box>
-      </Stack>
-    </Paper>
+  return <Stack spacing={0} sx={{ height: "100%", maxHeight: "100%", minHeight: 0, overflow: "hidden", px: { xs: .5, sm: 1, md: 1.5 }, pb: { xs: .5, md: 1.25 }, pt: { xs: .5, md: 1.25 }, boxSizing: "border-box", bgcolor: "background.default" }}>
     <Popover
       open={Boolean(onlineAnchor)}
       anchorEl={onlineAnchor}
@@ -672,121 +512,99 @@ export function Chat() {
         </>}
       </Box>
     </Popover>
+    {selected?.type === "CONTEXT" && selectedId && <IncidentActionsPanel channelId={selectedId} open={incidentActionsOpen} onClose={() => setIncidentActionsOpen(false)} />}
+    {selectedId && <ChatHistorySearch channelId={selectedId} open={historySearchOpen} onClose={() => setHistorySearchOpen(false)} />}
     {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
-    <Paper elevation={0} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "244px minmax(0,1fr)", lg: "252px minmax(0,1fr)", xl: (conversationInfoOpen || (selected?.type === "TEAM" && teamPanelOpen)) ? "258px minmax(0,1fr) 292px" : "258px minmax(0,1fr)" }, gap: { xs: 0, md: .9 }, p: { xs: 0, md: .8 }, minHeight: 0, flex: 1, overflow: "hidden", borderRadius: 3.5, maxHeight: "100%", height: "100%", border: "1px solid", borderColor: "divider", boxShadow: "0 16px 42px rgba(15,23,42,.075)", bgcolor: "background.paper", backgroundImage: (theme) => theme.palette.mode === "dark" ? "linear-gradient(145deg,rgba(12,31,46,.98),rgba(11,27,42,.98))" : "linear-gradient(145deg,#ffffff,#fbfdff)" }}>
-      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: "grid", gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: { xs: 0, md: 3.25 }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.022)" : "rgba(248,250,252,.76)", border: { md: "1px solid" }, borderColor: { md: "divider" }, boxShadow: (theme) => theme.palette.mode === "dark" ? "0 10px 28px rgba(0,0,0,.10), inset 0 1px rgba(255,255,255,.02)" : "0 8px 24px rgba(15,23,42,.045)" }}>
-        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", px: 1.35, py: 1, minHeight: 52 }}>
-          <Box sx={{ minWidth: 0, pl: .25 }}><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>Conversas</Typography>{totalUnread > 0 && <Chip size="small" color="primary" label={totalUnread > 99 ? "99+" : totalUnread} sx={{ height: 20, fontWeight: 900 }} />}</Stack><Typography variant="caption" color="text.secondary">{channels.length} conversa(s){totalUnread ? ` · ${totalUnread} não lida(s)` : ""}</Typography></Box>
-          <Stack direction="row">
-            {["ADMIN","COORDENADOR"].includes(user?.role ?? "") && <Tooltip title="Consolidar conversas privadas duplicadas"><span><IconButton size="small" disabled={maintenanceRunning} onClick={() => void consolidateDirectDuplicates()}>{maintenanceRunning ? <CircularProgress size={17} /> : <CleaningServicesOutlined fontSize="small" />}</IconButton></span></Tooltip>}
-            <Tooltip title="Conversa privada"><IconButton size="small" onClick={() => setDirectOpen(true)}><PersonOutlineRounded /></IconButton></Tooltip>
-            <Tooltip title="Novo canal"><IconButton size="small" aria-label="Criar canal" onClick={() => setCreateOpen(true)}><AddCommentOutlined /></IconButton></Tooltip>
-          </Stack>
+    <Drawer anchor="right" open={compactContext && conversationInfoOpen && Boolean(selected)} onClose={() => setConversationInfoOpen(false)}
+      sx={{ display: { xs: "block", lg: "none" } }}
+      slotProps={{ paper: { sx: { width: { xs: "min(92vw, 360px)", sm: 380 }, maxWidth: "100vw", p: 2, bgcolor: "background.paper" } } }}>
+      <Stack spacing={2}>
+        <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="h6" sx={{ fontWeight: 800 }}>Informações da conversa</Typography>
+          <IconButton aria-label="Fechar informações" onClick={() => setConversationInfoOpen(false)}><CloseOutlined /></IconButton>
         </Stack>
-        <Box sx={{ px: 1.25, pb: 1 }}><TextField size="small" fullWidth value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Buscar conversa..." slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .7, fontSize: 18, color: "text.secondary" }} /> } }} /></Box>
+        <Divider />
+        {selected && <>
+          <Typography sx={{ fontWeight: 800 }}>{selected.name}</Typography>
+          <Chip size="small" label={selected.type === "CONTEXT" ? "Sala de incidente" : selected.type === "DIRECT" ? "Conversa direta" : "Canal da equipe"} sx={{ alignSelf: "flex-start" }} />
+          {selected.description && <Typography variant="body2" color="text.secondary">{selected.description}</Typography>}
+          {selected.type === "CONTEXT" && <IncidentContextSummary channel={selected} onOpenActions={() => { setConversationInfoOpen(false); setIncidentActionsOpen(true); }} onSearchHistory={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }} />}
+          <SharedFilesPanel channelId={selected.id} messages={messages} />
+          <Typography variant="subtitle2">Participantes ({selected.members?.length ?? 0})</Typography>
+          <Stack spacing={1}>{selected.members?.map((member) => <Typography variant="body2" key={member.user.id}>{member.user.name} · @{member.user.username}</Typography>)}</Stack>
+          <Button variant="outlined" onClick={() => { setConversationInfoOpen(false); setHistorySearchOpen(true); }}>Pesquisar histórico</Button>
+        </>}
+      </Stack>
+    </Drawer>
+    <Paper elevation={0} sx={{
+      display: "grid",
+      gridTemplateColumns: {
+        xs: "minmax(0, 1fr)",
+        md: "276px minmax(0, 1fr)",
+        lg: showSidePanel
+          ? "284px minmax(0, 1fr) 276px"
+          : "284px minmax(0, 1fr)",
+        xl: showSidePanel
+          ? "300px minmax(0, 1fr) 310px"
+          : "300px minmax(0, 1fr)",
+      },
+      gap: 0,
+      p: 0,
+      minHeight: 0,
+      flex: 1,
+      overflow: "hidden",
+      borderRadius: { xs: 2, md: 4 },
+      maxHeight: "100%",
+      height: "100%",
+      border: "1px solid",
+      borderColor: "divider",
+      boxShadow: (theme) => theme.shadows[3],
+      bgcolor: "background.paper",
+    }}>
+      <Box sx={{ position: "relative", minHeight: 0, overflow: "hidden", display: { xs: mobileConversationOpen ? "none" : "grid", md: "grid" }, gridTemplateRows: "auto auto 1px minmax(0, 1fr)", alignContent: "stretch", borderRadius: 0, bgcolor: "background.paper", borderRight: { md: "1px solid" }, borderColor: "divider" }}>
+        <ConversationListHeader channelCount={channels.length} unreadCount={totalUnread} availability={availability} onChangeAvailability={cycleAvailability} canMaintain={["ADMIN", "COORDENADOR"].includes(user?.role ?? "")} maintenanceRunning={maintenanceRunning} onConsolidate={() => void consolidateDirectDuplicates()} onOpenDirect={() => setDirectOpen(true)} onCreateChannel={() => setCreateOpen(true)} />
+        <ConversationListSearch value={conversationSearch} onChange={setConversationSearch} />
         <Box sx={{ mx: 1.2, height: 6 }} />
         <Box sx={{ minHeight: 0, height: "100%", overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", scrollbarWidth: "none", "&::-webkit-scrollbar": { display: "none" } }}>
-        <List disablePadding sx={{ width: "100%", py: .35 }}>
-          {sidebarChannels.map((channel, index) => {
-            const group = favorites.includes(channel.id) ? "Favoritos" : channel.type === "DIRECT" ? "Recentes" : "Equipes";
-            const previousChannel = sidebarChannels[index - 1];
-            const previousGroup = previousChannel ? (favorites.includes(previousChannel.id) ? "Favoritos" : previousChannel.type === "DIRECT" ? "Recentes" : "Equipes") : null;
-            return <Box key={channel.id}>
-              {group !== previousGroup && <Typography variant="overline" sx={{ display: "block", px: 1.35, pt: index ? .9 : .7, pb: .2, fontSize: ".61rem", lineHeight: 1.4, letterSpacing: ".09em", fontWeight: 900, color: "text.secondary" }}>{group}</Typography>}
-              
-              <ListItemButton
-                key={channel.id}
-                selected={channel.id === selectedId}
-                onClick={() => setSelectedId(channel.id)}
-                sx={{
-                  py: .58,
-                  px: 1,
-                  mx: .7,
-                  my: .28,
-                  minHeight: 52,
-                  borderRadius: 2.5,
-                  border: "1px solid transparent",
-                  transition: "background-color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease",
-                  "&:hover": { transform: "translateX(2px)", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "rgba(15,23,42,.035)", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(148,163,184,.10)" : "rgba(148,163,184,.16)" },
-                  "&.Mui-selected": { bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(39,57,72,.88)" : "rgba(239,247,244,.96)", borderColor: (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.18)" : "rgba(24,199,122,.16)", boxShadow: "inset 3px 0 0 rgba(24,199,122,.78), 0 8px 22px rgba(15,23,42,.055)" },
-                  "&.Mui-selected:hover": { bgcolor: "action.selected" },
-                }}
-              >
-                <Box sx={{ position: "relative", mr: 1.1, width: 32, height: 32, minWidth: 32, flex: "0 0 32px", borderRadius: "50%", bgcolor: channel.id === selectedId ? (theme) => theme.palette.mode === "dark" ? "rgba(24,199,122,.14)" : "rgba(24,199,122,.09)" : "action.hover", display: "grid", placeItems: "center", fontWeight: 900, color: channel.id === selectedId ? "primary.main" : "text.primary", border: "1px solid", borderColor: channel.id === selectedId ? "rgba(24,199,122,.32)" : "divider", boxShadow: "none" }}>
-                  {channel.name.slice(0,1).toUpperCase()}
-                  <Circle sx={{ position: "absolute", width: 11, height: 11, right: 0, bottom: 0, color: channel.type === "DIRECT" ? presenceColor(presence.find((item) => channel.members?.some((member) => member.user.id === item.userId && member.user.id !== user?.id))?.effectiveStatus) : channel.members?.some((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus === "ONLINE") ? "success.main" : "text.disabled", stroke: "background.paper", strokeWidth: 4 }} />
-                </Box>
-                <ListItemText
-                  primary={
-                    <Stack direction="row" spacing={.5} sx={{ alignItems: "center", minWidth: 0 }}>
-                      <Box sx={{ color: "text.secondary", display: "flex", alignItems: "center" }}>{channel.type === "DIRECT" ? <PersonOutlineRounded sx={{ fontSize: 14 }} /> : <GroupsOutlined sx={{ fontSize: 14 }} />}</Box><Typography noWrap sx={{ fontWeight: channel.unread ? 900 : 780, fontSize: ".84rem", lineHeight: 1.2, letterSpacing: "-.01em", flex: 1 }}>{channel.name}</Typography>
-                      {favorites.includes(channel.id) && <Typography component="span" sx={{ color: "warning.main", fontSize: ".72rem" }}>★</Typography>}
-                    </Stack>
-                  }
-                  secondary={(() => {
-                    const typing = remoteTyping.find((item) => item.channelId === channel.id && item.userId !== user?.id);
-                    if (typing) return `${typing.name} está digitando...`;
-                    const latest = channel.messages?.[channel.messages.length - 1];
-                    if (!latest) return channel.clientName || channel.description || "Sem mensagens ainda";
-                    const preview = latest.content.startsWith("[hub-card]") ? "Compartilhou um registro" : latest.content.startsWith("[anexo] ") ? "📎 Enviou um arquivo" : latest.content.replace(/\s+/g, " ");
-                    return `${latest.author.id === user?.id ? "Você: " : ""}${preview}`;
-                  })()}
-                  slotProps={{ secondary: { sx: { fontSize: ".69rem", mt: .28, lineHeight: 1.25, fontWeight: channel.unread ? 750 : 450, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } } }}
-                />
-                <Stack spacing={.15} sx={{ alignItems: "flex-end", ml: .4 }}>
-                  {channel.messages?.length ? <Typography variant="caption" color="text.secondary" sx={{ fontSize: ".62rem", lineHeight: 1 }}>{new Date(channel.messages[channel.messages.length - 1].createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</Typography> : null}
-                  <Stack direction="row" spacing={.25} sx={{ alignItems: "center" }}>
-                  <Tooltip title={favorites.includes(channel.id) ? "Remover dos favoritos" : "Favoritar"}>
-                    <IconButton size="small" onClick={(event) => { event.stopPropagation(); toggleFavorite(channel.id); }} sx={{ width: 28, height: 28, p: .5, fontSize: 16 }}>{favorites.includes(channel.id) ? "★" : "☆"}</IconButton>
-                  </Tooltip>
-                  {channel.unread > 0 && <Chip size="small" color="primary" label={channel.unread > 99 ? "99+" : channel.unread} sx={{ minWidth: 24, height: 20, fontWeight: 900 }} />}
-                  </Stack>
-                </Stack>
-              </ListItemButton>
-            </Box>;
-          })}
-        </List>
+        <ChannelList channels={sidebarChannels} selectedId={selectedId} favorites={favorites} presence={presence} remoteTyping={remoteTyping} currentUserId={user?.id} onSelect={selectConversation} onToggleFavorite={toggleFavorite} />
         </Box>
-        {channelsLoading && !channels.length ? <Stack spacing={1} sx={{ px: 1.2, py: 1 }}><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /></Stack> : !channels.length && <Box sx={{ px: 2, py: 4, textAlign: "center" }}><Box sx={{ width: 44, height: 44, mx: "auto", mb: 1.2, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: "action.hover", color: "text.secondary" }}><ForumOutlined fontSize="small" /></Box><Typography sx={{ fontWeight: 850, fontSize: ".88rem" }}>Nenhuma conversa ainda</Typography><Typography color="text.secondary" variant="caption" sx={{ display: "block", mt: .35 }}>Inicie uma conversa privada ou crie um canal para sua equipe.</Typography><Button size="small" variant="outlined" startIcon={<PersonOutlineRounded />} onClick={() => setDirectOpen(true)} sx={{ mt: 1.4, borderRadius: 2 }}>Nova conversa</Button></Box>}
+        {channelsLoading && !channels.length ? <Stack spacing={1} sx={{ px: 1.2, py: 1 }}><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /><Skeleton variant="rounded" height={54} /></Stack> : !channels.length && <Box sx={{ px: 2.5, py: 5, textAlign: "center" }}><Box sx={{ width: 52, height: 52, mx: "auto", mb: 1.5, borderRadius: 3, display: "grid", placeItems: "center", bgcolor: "action.hover", color: "primary.main" }}><ForumOutlined /></Box><Typography sx={{ fontWeight: 800, fontSize: ".9rem" }}>Comece uma conversa</Typography><Typography color="text.secondary" variant="body2" sx={{ mt: .65, lineHeight: 1.5 }}>Converse com alguém do time ou crie um canal para colaborar.</Typography><Button size="small" variant="contained" startIcon={<PersonOutlineRounded />} onClick={() => setDirectOpen(true)} sx={{ mt: 2, borderRadius: 5, boxShadow: "none" }}>Nova conversa</Button></Box>}
       </Box>
-      <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: { xs: 0, md: 3.25 }, border: { md: "1px solid" }, borderColor: { md: "divider" }, bgcolor: "background.paper" }}>
-        <Stack direction="row" spacing={1} sx={{ px: 1.65, py: 1.05, minHeight: 58, alignItems: "center", justifyContent: "space-between", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.012)" : "rgba(255,255,255,.82)" }}><Box><Stack direction="row" spacing={.7} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 900, fontSize: { xs: ".95rem", md: "1rem" }, letterSpacing: "-.015em" }}>{selected?.name || "Selecione uma conversa"}</Typography>{selected && <Chip size="small" icon={<Circle sx={{ fontSize: "9px !important" }} />} label={selected?.type === "DIRECT" ? ({ ONLINE: "Online", AWAY: "Ausente", BUSY: "Ocupado", OFFLINE: "Offline" }[selectedPresence?.effectiveStatus ?? "OFFLINE"]) : `${selected.members?.filter((member) => presence.find((item) => item.userId === member.user.id)?.effectiveStatus !== "OFFLINE").length ?? 0} online`} color={selectedPresence?.effectiveStatus === "BUSY" ? "error" : selectedPresence?.effectiveStatus === "AWAY" ? "warning" : selectedPresence?.effectiveStatus === "ONLINE" ? "success" : "default"} variant="outlined" />}</Stack><Typography variant="caption" color="text.secondary">{selectedPresence?.statusMessage || "Mensagens instantâneas · tempo real"}</Typography></Box><Stack direction="row" spacing={.5}><TextField size="small" value={messageSearch} onChange={(event) => setMessageSearch(event.target.value)} placeholder="Buscar na conversa" sx={{ width: { md: 190, lg: 210 }, "& .MuiOutlinedInput-root": { borderRadius: 2.4 } }} slotProps={{ input: { startAdornment: <SearchOutlined sx={{ mr: .5, fontSize: 17, color: "text.secondary" }} /> } }} />{selected?.type === "TEAM" && <Tooltip title={teamPanelOpen ? "Ocultar painel operacional" : "Abrir painel operacional"}><IconButton size="small" color={teamPanelOpen ? "primary" : "default"} onClick={() => setTeamPanelOpen((value) => !value)}><GroupsOutlined /></IconButton></Tooltip>}<Tooltip title="Informações da conversa"><span><IconButton size="small" disabled={!selected} aria-label="Informações da conversa" onClick={() => setConversationInfoOpen((current) => !current)} color={conversationInfoOpen ? "primary" : "default"}><InfoOutlined /></IconButton></span></Tooltip><IconButton size="small" aria-label="Opções da conversa" onClick={(event) => setConversationMenuAnchor(event.currentTarget)}><MoreHorizOutlined /></IconButton></Stack></Stack>
+      <Box sx={{ display: { xs: mobileConversationOpen ? "flex" : "none", md: "flex" }, flexDirection: "column", minWidth: 0, minHeight: 0, overflow: "hidden", borderRadius: 0, bgcolor: "background.paper" }}>
+        <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 1, px: 1, py: .5, borderBottom: "1px solid", borderColor: "divider" }}><IconButton aria-label="Voltar para conversas" onClick={backToConversations}><ArrowBackRounded /></IconButton><Typography variant="body2" color="text.secondary">Conversas</Typography></Box>
+        <ConversationHeader selected={selected} selectedPresence={selectedPresence} presence={presence} messageSearch={messageSearch} onMessageSearch={setMessageSearch} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} onOpenOrigin={(contextType, contextId) => navigate(contextType === "TICKET" ? `/operacao/tickets?movidesk=${encodeURIComponent(contextId)}` : `/correcoes?task=${encodeURIComponent(contextId)}`)} teamPanelOpen={teamPanelOpen} onToggleTeamPanel={() => setTeamPanelOpen((value) => !value)} conversationInfoOpen={wideContext ? showSidePanel : conversationInfoOpen} onToggleConversationInfo={() => { if (wideContext) { setWidePanelVisible((value) => !value); setConversationInfoOpen(false); } else setConversationInfoOpen((value) => !value); }} onOpenMenu={setConversationMenuAnchor} />
         <Divider />
-        <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(7,22,34,.22)" : "#f7f9fb", backgroundImage: (theme) => theme.palette.mode === "dark" ? "radial-gradient(circle at 50% 0%, rgba(24,199,122,.025), transparent 32%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.025), transparent 28%)" : "radial-gradient(circle at 50% 0%, rgba(24,199,122,.035), transparent 34%), radial-gradient(circle at 100% 100%, rgba(59,130,246,.035), transparent 30%)" }}>
-          {loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : visibleMessages.map((message, messageIndex) => {
-            const mine = message.author.id === user?.id;
-            const messageDay = new Date(message.createdAt).toLocaleDateString("pt-BR");
-            const previousDay = messageIndex ? new Date(visibleMessages[messageIndex - 1].createdAt).toLocaleDateString("pt-BR") : null;
-            const showDay = messageDay !== previousDay;
-            const parent = message.parentId ? messages.find((item) => item.id === message.parentId) : null;
-            const previous = visibleMessages[messageIndex - 1];
-            const sameAuthor = previous?.author.id === message.author.id && (new Date(message.createdAt).getTime() - new Date(previous.createdAt).getTime()) < 5 * 60_000;
-            const mentioned = Boolean(user?.username && message.content.toLowerCase().includes(`@${user.username.toLowerCase()}`));
-            const renderContent = (value: string) => value.split(/(@[\\w.-]+)/g).map((part, index) => part.startsWith("@") ? <Box component="span" key={index} sx={{ fontWeight: 900, textDecoration: "underline" }}>{part}</Box> : part);
-            return <Box key={message.id}>{showDay && <Stack direction="row" spacing={1} sx={{ alignItems: "center", my: 1.4 }}><Divider sx={{ flex: 1 }} /><Chip size="small" variant="outlined" label={messageDay === new Date().toLocaleDateString("pt-BR") ? "Hoje" : messageDay} sx={{ height: 22, fontSize: ".68rem", color: "text.secondary" }} /><Divider sx={{ flex: 1 }} /></Stack>}<Box sx={{ display: "flex", justifyContent: mine ? "flex-end" : "flex-start", mb: sameAuthor ? .2 : .85, mt: sameAuthor ? 0 : .4 }}><Paper elevation={0} sx={{ maxWidth: { xs: "90%", md: "56%", xl: "50%" }, p: "8px 12px", bgcolor: mine ? (theme) => theme.palette.mode === "dark" ? "rgba(51,65,85,.88)" : "#eef3f7" : mentioned ? "rgba(245,158,11,.10)" : "background.paper", color: "text.primary", border: "1px solid", borderColor: mentioned ? "warning.main" : mine ? "rgba(148,163,184,.32)" : "divider", borderRadius: mine ? "17px 17px 5px 17px" : "17px 17px 17px 5px", boxShadow: mine ? "0 6px 18px rgba(15,23,42,.07)" : "0 5px 15px rgba(15,23,42,.04)" }}><Stack direction="row" spacing={1} sx={{ justifyContent: "space-between", alignItems: "center" }}><Typography variant="caption" sx={{ fontWeight: 800, opacity: .8 }}>{sameAuthor ? "" : message.author.name}</Typography><Stack direction="row" spacing={.15}><Tooltip title={pinState.has(message.id) ? "Desafixar mensagem" : "Fixar mensagem"}><IconButton size="small" onClick={() => void togglePinnedMessage(message.id)} sx={{ color: pinState.has(message.id) ? "primary.main" : "inherit", opacity: pinState.has(message.id) ? 1 : .55 }}><PushPinOutlined sx={{ fontSize: 15 }} /></IconButton></Tooltip><Tooltip title="Responder"><IconButton size="small" onClick={() => setReplyTo(message)} sx={{ color: "inherit", opacity: .65 }}><ReplyOutlined sx={{ fontSize: 16 }} /></IconButton></Tooltip></Stack></Stack>{parent && <Box sx={{ px: 1, py: .6, mb: .6, borderLeft: "3px solid", borderColor: "primary.main", bgcolor: "action.hover", borderRadius: 1 }}><Typography variant="caption" sx={{ fontWeight: 800 }}>{parent.author.name}</Typography><Typography variant="caption" noWrap sx={{ display: "block", maxWidth: 420 }}>{parent.content}</Typography></Box>}{message.content.startsWith("[hub-card]") ? (() => { try { const card = JSON.parse(message.content.slice(10)) as { type: string; id?: number; title: string; client?: string | null; status?: string | null; path: string }; return <Paper elevation={0} sx={{ minWidth: { xs: 220, sm: 310 }, maxWidth: 430, p: 1.25, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(15,23,42,.42)" : "#ffffff", color: "text.primary", border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", gap: 1 }}><Chip size="small" label={`${card.type}${card.id ? ` #${card.id}` : ""}`} sx={{ fontWeight: 850 }} />{card.status && <Chip size="small" variant="outlined" label={card.status} />}</Stack><Typography sx={{ mt: .8, fontWeight: 900, lineHeight: 1.3 }}>{card.title}</Typography>{card.client && <Typography variant="body2" sx={{ mt: .4, opacity: .75 }}>Cliente: {card.client}</Typography>}<Button size="small" endIcon={<OpenInNewOutlined />} sx={{ mt: .9, px: 0, color: "inherit", fontWeight: 850 }} onClick={() => openSharedRecord(card)}>Abrir registro</Button></Paper>; } catch { return <Typography>Registro compartilhado</Typography>; } })() : attachmentInfo(message.content) ? (() => { const attachment = attachmentInfo(message.content)!; return <Paper component="a" href={attachment.href} download={attachment.name} elevation={0} sx={{ display: "flex", alignItems: "center", gap: 1, p: 1, minWidth: 210, maxWidth: 340, textDecoration: "none", color: "inherit", bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 2 }}><Box sx={{ width: 34, height: 34, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: "action.hover" }}><AttachFileRounded fontSize="small" /></Box><Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>{attachment.name}</Typography><Typography variant="caption" color="text.secondary">{Math.max(1, Math.round(attachment.size / 1024))} KB</Typography></Box><DownloadRounded fontSize="small" /></Paper>; })() : <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{renderContent(message.content)}</Typography>}<Typography variant="caption" sx={{ display: "block", textAlign: "right", opacity: .7 }}>{new Date(message.createdAt).toLocaleString("pt-BR")}</Typography></Paper></Box></Box>;
-          })}
+        <Box ref={messagesRef} onScroll={handleMessagesScroll} sx={{ position: "relative", flex: "1 1 0", height: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", overscrollBehavior: "contain", p: { xs: 1.25, md: 1.75 }, scrollbarWidth: "thin", "&::-webkit-scrollbar": { width: 7 }, "&::-webkit-scrollbar-thumb": { bgcolor: "action.disabled", borderRadius: 8 }, "&::-webkit-scrollbar-track": { bgcolor: "transparent" }, bgcolor: "background.paper" }}>
+          {!selected && !loading && <Stack spacing={2} sx={{ height: "100%", alignItems: "center", justifyContent: "center", textAlign: "center", px: 3 }}>
+            <Box sx={{ width: 76, height: 76, borderRadius: 5, display: "grid", placeItems: "center", bgcolor: "action.hover", color: "primary.main" }}><ForumOutlined sx={{ fontSize: 36 }} /></Box>
+            <Box><Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: "-.02em" }}>Sua próxima conversa começa aqui</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .75, maxWidth: 390 }}>Troque mensagens com sua equipe, compartilhe arquivos e acompanhe decisões em um só lugar.</Typography></Box>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", justifyContent: "center" }}>
+              <Button variant="contained" onClick={() => setDirectOpen(true)} sx={{ borderRadius: 5, boxShadow: "none" }}>Iniciar conversa</Button>
+              <Button variant="outlined" onClick={() => setCreateOpen(true)} sx={{ borderRadius: 5 }}>Criar canal</Button>
+            </Stack>
+          </Stack>}
+          {selected && (loading ? <Stack spacing={1.1} sx={{ p: 1 }}><Skeleton variant="rounded" width="36%" height={48} /><Skeleton variant="rounded" width="52%" height={68} sx={{ alignSelf: "flex-end" }} /><Skeleton variant="rounded" width="28%" height={44} /></Stack> : <><Box sx={{ textAlign: "center" }}>{hasOlder && !messageSearch.trim() && <Button size="small" disabled={loadingOlder} onClick={() => void loadOlder()}>{loadingOlder ? "Carregando..." : "Mensagens anteriores"}</Button>}</Box><MessageList visibleMessages={visibleMessages} messages={messages} currentUserId={user?.id} currentUsername={user?.username} pinnedIds={pinState} onTogglePinned={(id) => void togglePinnedMessage(id)} onReply={setReplyTo} onOpenRecord={openSharedRecord} /></>)}
           <div ref={bottomRef} />
           {showJumpToLatest && <Button variant="contained" size="small" startIcon={<KeyboardArrowDownRounded />} onClick={jumpToLatest} sx={{ position: "sticky", bottom: 10, left: "50%", transform: "translateX(-50%)", zIndex: 4, borderRadius: 99, px: 1.5, boxShadow: "0 10px 28px rgba(15,23,42,.22)", textTransform: "none" }}>Mensagens recentes</Button>}
         </Box>
         <Divider />
         {typingNames.length > 0 && <Typography variant="caption" color="text.secondary" sx={{ px: 1.6, pt: .45 }}>{typingNames.join(", ")} {typingNames.length === 1 ? "está" : "estão"} digitando...</Typography>}
         {replyTo && <Stack direction="row" sx={{ px: 1.5, py: .7, alignItems: "center", justifyContent: "space-between", bgcolor: "action.hover", borderTop: "1px solid", borderColor: "divider" }}><Box><Typography variant="caption" sx={{ fontWeight: 850 }}>Respondendo a {replyTo.author.name}</Typography><Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", maxWidth: 620 }}>{replyTo.content}</Typography></Box><IconButton size="small" onClick={() => setReplyTo(null)}><CloseOutlined fontSize="small" /></IconButton></Stack>}
-        <Stack direction="row" spacing={.55} sx={{ mx: 1, mb: .8, mt: .55, px: .8, py: .55, alignItems: "flex-end", bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(15,32,47,.92)" : "rgba(255,255,255,.96)", border: "1px solid", borderColor: "divider", borderRadius: 3.5, boxShadow: "0 10px 28px rgba(15,23,42,.07)" }}>
-          <input ref={attachmentInputRef} type="file" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void sendAttachment(file); }} /><Tooltip title="Anexar arquivo (máx. 8 MB)"><span><IconButton disabled={!selectedId || uploadingAttachment} onClick={() => attachmentInputRef.current?.click()}><AttachFileRounded /></IconButton></span></Tooltip><Tooltip title="Emojis"><IconButton onClick={(event) => setEmojiAnchor(event.currentTarget)} disabled={!selectedId}><EmojiEmotionsOutlined /></IconButton></Tooltip>
-          <Tooltip title="Figurinhas"><IconButton onClick={() => setStickersOpen(true)} disabled={!selectedId}><CelebrationOutlined /></IconButton></Tooltip>
-          {selected?.type === "TEAM" && <Tooltip title="Ações rápidas da equipe"><IconButton color="primary" onClick={(event) => setQuickActionsAnchor(event.currentTarget)}><BoltOutlined /></IconButton></Tooltip>}
-          <Tooltip title={soundEnabled ? "Desativar som" : "Ativar som"}><IconButton color={soundEnabled ? "primary" : "default"} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); if ("Notification" in window && Notification.permission === "default") void Notification.requestPermission(); }}><NotificationsActiveOutlined /></IconButton></Tooltip>
-          <TextField size="small" fullWidth multiline maxRows={4} sx={{ "& .MuiOutlinedInput-root": { borderRadius: 3, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.035)" : "#f6f8fa", pr: .5 }, "& fieldset": { borderColor: "transparent" }, "& .Mui-focused fieldset": { borderColor: "primary.main" } }}  value={content} disabled={!selectedId || sending} placeholder="Mensagem · Enter envia, Shift+Enter quebra linha" slotProps={{ htmlInput: { maxLength: 4000 } }} onChange={(event) => { setContent(event.target.value); if (selectedId && Date.now()-typingSentAt.current>2500) { typingSentAt.current=Date.now();void api.post(`/chat/channels/${selectedId}/typing`, { active: true }).catch(() => undefined); } if (typingTimer.current) window.clearTimeout(typingTimer.current); typingTimer.current = window.setTimeout(() => { if (selectedId) void api.post(`/chat/channels/${selectedId}/typing`, { active: false }).catch(() => undefined); }, 1200); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-          <Button variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendRounded />} disabled={!selectedId || !content.trim() || sending} onClick={() => void send()} sx={{ minWidth: 42, width: 42, height: 38, px: 0, borderRadius: 2.5, boxShadow: "none", "&:hover": { boxShadow: "0 6px 16px rgba(24,199,122,.18)" }, "& .MuiButton-endIcon": { m: 0 } }}><Box component="span" sx={{ display: "none" }}>Enviar</Box></Button>
-        </Stack>
+        <Composer channelId={selectedId} channelType={selected?.type} content={content} sending={sending} uploadingAttachment={uploadingAttachment} soundEnabled={soundEnabled} attachmentInputRef={attachmentInputRef} onAttach={sendAttachment} onOpenEmoji={setEmojiAnchor} onOpenStickers={() => setStickersOpen(true)} onOpenQuickActions={setQuickActionsAnchor} onToggleSound={() => { const next = !soundEnabled; setSoundEnabled(next); localStorage.setItem("techlead-chat-sound", next ? "on" : "off"); }} onContentChange={(value) => { setContent(value); notifyTyping(value); }} onSend={() => void send()} />
       </Box>
-      {(conversationInfoOpen || (selected?.type === "TEAM" && teamPanelOpen)) && selected && <Box sx={{ display: { xs: "none", xl: "block" }, border: "1px solid", borderColor: "divider", borderRadius: 3, p: 1.6, overflowY: "auto", my: .1, bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255,255,255,.015)" : "rgba(248,250,252,.72)" }}>
+      {showSidePanel && selected && <Box sx={{ display: { xs: "none", lg: "block" }, borderLeft: "1px solid", borderColor: "divider", borderRadius: 0, p: 1.6, overflowY: "auto", my: 0, bgcolor: "background.paper" }}>
         <Stack spacing={2}>
-          <Box sx={{ textAlign: "center", pt: 1 }}>
-            <Box sx={{ width: 64, height: 64, mx: "auto", mb: 1, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontSize: "1.35rem", fontWeight: 950, boxShadow: "0 10px 24px rgba(24,199,122,.18)" }}>{selected.name.slice(0,1).toUpperCase()}</Box>
-            <Typography sx={{ fontWeight: 900 }}>{selected.name}</Typography>
-            <Typography variant="caption" color="text.secondary">{selected.type === "DIRECT" ? "Conversa privada" : "Canal da equipe"}</Typography>
+          <Box sx={{ pb: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>Informações e arquivos</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block", mt: .4 }}>{selected.name}</Typography>
           </Box>
+          {selected.type === "CONTEXT" && (
+            <>
+              <IncidentContextSummary channel={selected} onOpenActions={() => setIncidentActionsOpen(true)} onSearchHistory={() => setHistorySearchOpen(true)} />
+              <IncidentWorkSummary channelId={selected.id} onManage={() => setIncidentActionsOpen(true)} />
+            </>
+          )}
+          <SharedFilesPanel channelId={selected.id} messages={messages} />
           <Divider />
           {selected.type === "DIRECT" && selectedPeer ? <Stack spacing={1}>
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Contato</Typography>
@@ -822,7 +640,7 @@ export function Chat() {
       message={incomingPopup ? <Paper elevation={10} sx={{ width: 340, maxWidth: "calc(100vw - 24px)", p: 1.35, borderRadius: 2.5, border: "1px solid", borderColor: "rgba(24,199,122,.35)", borderLeft: "4px solid", borderLeftColor: "primary.main", background: (theme) => theme.palette.mode === "dark" ? "linear-gradient(135deg,rgba(16,30,46,.98),rgba(17,48,42,.98))" : "linear-gradient(135deg,#fff,#f2fff9)", boxShadow: "0 18px 48px rgba(15,23,42,.20)" }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
           <Box sx={{ width: 38, height: 38, borderRadius: "50%", bgcolor: "primary.main", color: "primary.contrastText", display: "grid", placeItems: "center", fontWeight: 950, flexShrink: 0 }}>{incomingPopup.authorName.slice(0,1).toUpperCase()}</Box>
-          <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 900 }}>NOVA MENSAGEM</Typography><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>{incomingPopup.authorName}</Typography><Typography variant="caption" color="text.secondary">{incomingPopup.channelName}</Typography><Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{incomingPopup.preview}</Typography><Button size="small" sx={{ mt: .65, px: 0 }} onClick={() => { setSelectedId(incomingPopup.channelId); setIncomingPopup(null); }}>Abrir conversa</Button></Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}><Typography variant="caption" color="primary.main" sx={{ fontWeight: 900 }}>NOVA MENSAGEM</Typography><Typography sx={{ fontWeight: 900, lineHeight: 1.2 }}>{incomingPopup.authorName}</Typography><Typography variant="caption" color="text.secondary">{incomingPopup.channelName}</Typography><Typography variant="body2" sx={{ mt: .55, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{incomingPopup.preview}</Typography><Button size="small" sx={{ mt: .65, px: 0 }} onClick={() => { setSelectedId(incomingPopup.channelId); setMobileConversationOpen(true); setIncomingPopup(null); }}>Abrir conversa</Button></Box>
           <IconButton size="small" onClick={() => setIncomingPopup(null)}><CloseOutlined fontSize="small" /></IconButton>
         </Stack>
       </Paper> : undefined}
@@ -874,9 +692,3 @@ export function Chat() {
 
 
 
-function presenceColor(status: Presence["effectiveStatus"] | undefined) {
-  if (status === "ONLINE") return "success.main";
-  if (status === "AWAY") return "warning.main";
-  if (status === "BUSY") return "error.main";
-  return "text.disabled";
-}

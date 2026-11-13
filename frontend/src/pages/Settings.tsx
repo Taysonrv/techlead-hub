@@ -12,6 +12,7 @@ import {
   Switch,
   TextField,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Select,
@@ -29,15 +30,21 @@ import {
 
 import {
   useEffect,
+  useCallback,
   useState,
 } from "react";
 import { PageHeader } from "../components/PageHeader";
+import { ContentState } from "../components/ContentState";
 import { Import } from "./Import";
+import { Users } from "./Users";
 import { api, getApiErrorMessage } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type LocalNotificationPreferences } from "../utils/notificationSound";
 
 type ConfigurationState = {
   databaseConfigured: boolean;
+  weatherConfigured?: boolean;
+  weatherCredentialSource?: "central" | "environment" | "missing";
   organization: string;
   project: string;
   wiki: string;
@@ -46,9 +53,40 @@ type ConfigurationState = {
   movideskConfigured: boolean;
   movideskUrl: string;
   runtime?: string;
+  teamsWorkflows?: {
+    supportTicketsEnabled: boolean;
+    supportTicketsWebhookConfigured: boolean;
+    taskCreatedEnabled: boolean;
+    taskCreatedWebhookConfigured: boolean;
+    taskRegistroEnabled: boolean;
+    taskRegistroWebhookConfigured: boolean;
+    ticketBaseUrlConfigured: boolean;
+    ticketBaseUrl: string;
+  };
+};
+
+type TeamsWorkflowForm = {
+  supportTicketsEnabled: boolean;
+  supportTicketsWebhookUrl: string;
+  taskCreatedEnabled: boolean;
+  taskCreatedWebhookUrl: string;
+  taskRegistroEnabled: boolean;
+  taskRegistroWebhookUrl: string;
+  ticketBaseUrl: string;
+};
+
+const EMPTY_TEAMS_WORKFLOW_FORM: TeamsWorkflowForm = {
+  supportTicketsEnabled: false,
+  supportTicketsWebhookUrl: "",
+  taskCreatedEnabled: false,
+  taskCreatedWebhookUrl: "",
+  taskRegistroEnabled: false,
+  taskRegistroWebhookUrl: "",
+  ticketBaseUrl: "",
 };
 
 type ConfigurationForm = {
+  weatherApiKey: string;
   databaseUrl: string;
   organization: string;
   project: string;
@@ -129,6 +167,7 @@ type ClassificationCoverage = {
 
 
 const EMPTY_FORM: ConfigurationForm = {
+  weatherApiKey: "",
   databaseUrl: "",
   organization: "",
   project: "",
@@ -139,11 +178,14 @@ const EMPTY_FORM: ConfigurationForm = {
 };
 
 export function Settings() {
-  const [section, setSection] = useState<"general" | "data">(() => window.location.hash === "#dados" ? "data" : "general");
+  const { isAdmin } = useAuth();
+  const [section, setSection] = useState<"general" | "data" | "team">(() => window.location.hash === "#dados" ? "data" : window.location.hash === "#equipe" ? "team" : "general");
   const [configuration, setConfiguration] =
     useState<ConfigurationState | null>(null);
   const [form, setForm] =
     useState<ConfigurationForm>(EMPTY_FORM);
+  const [teamsWorkflowForm, setTeamsWorkflowForm] = useState<TeamsWorkflowForm>(EMPTY_TEAMS_WORKFLOW_FORM);
+  const [savingTeamsWorkflows, setSavingTeamsWorkflows] = useState(false);
   const [loading, setLoading] =
     useState(true);
   const [saving, setSaving] =
@@ -184,13 +226,63 @@ export function Settings() {
   const [recentEnrichments, setRecentEnrichments] = useState<RecentEnrichment[]>([]);
   const [classificationCoverage, setClassificationCoverage] = useState<ClassificationCoverage | null>(null);
 
+  const loadConfiguration = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [configResult, diagnosticsResult] = await Promise.allSettled([
+        api.get<ConfigurationState>("/system-settings"),
+        api.get<Diagnostics>("/system-settings/diagnostics"),
+      ]);
+      if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
+      if (isAdmin) {
+        try {
+          const sessionsResult = await api.get<{ sessions: ActiveSession[] }>("/sessions");
+          setSessions(sessionsResult.data.sessions);
+        } catch { setSessions([]); }
+      }
+      if (configResult.status === "rejected") {
+        setConfiguration(null);
+        throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
+      }
+      const current = configResult.value.data;
+      setConfiguration(current);
+      setTeamsWorkflowForm((previous) => ({
+        ...previous,
+        supportTicketsEnabled: current.teamsWorkflows?.supportTicketsEnabled ?? false,
+        taskCreatedEnabled: current.teamsWorkflows?.taskCreatedEnabled ?? false,
+        taskRegistroEnabled: current.teamsWorkflows?.taskRegistroEnabled ?? false,
+        ticketBaseUrl: current.teamsWorkflows?.ticketBaseUrl ?? "",
+      }));
+      setForm((previous) => ({
+        ...previous,
+        organization: current.organization ?? "",
+        project: current.project ?? "",
+        wiki: current.wiki ?? "",
+        movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
+      }));
+      if (diagnosticsResult.status === "rejected") {
+        setError("As configurações foram carregadas, mas o diagnóstico da plataforma está temporariamente indisponível.");
+      }
+    } catch (loadError) {
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Não foi possível carregar as configurações.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => { setAzureHistoricalTest(null); }, [form.organization, form.project, form.pat, azureHistoryMonth]);
 
   useEffect(() => {
     void loadConfiguration();
-    void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
+    if (isAdmin) void api.get<{users:PermissionUser[]}>("/users").then(r=>setPermissionUsers(r.data.users)).catch(()=>setPermissionUsers([]));
     if (window.techLeadHub?.platform === "win32" && window.techLeadHub.startup) void window.techLeadHub.startup.get().then((state) => setStartupEnabled(state.enabled)).catch(() => undefined);
-  }, []);
+  }, [isAdmin, loadConfiguration]);
 
   useEffect(() => {
     if (!configuration?.movideskConfigured) return;
@@ -204,22 +296,39 @@ export function Settings() {
   }, [movideskBaseline?.status]);
 
   async function recoverDesktopKey() {
-    if (!window.techLeadHub?.configuration?.recoverKey || recoveryKey.length < 32) return;
+    if (!isAdmin || !window.techLeadHub?.configuration?.recoverKey || recoveryKey.length < 32) return;
     setRecoveringKey(true);
     setRecoveryMessage(null);
     try {
-      const validation = await api.post<{ valid: boolean }>("/system-settings/recovery/validate", { candidate: recoveryKey });
+      const validation = await api.post<{ valid: boolean; candidateVerified: boolean }>("/system-settings/recovery/validate", { candidate: recoveryKey });
       if (!validation.data.valid) {
-        setRecoveryMessage("A chave informada não consegue ler todos os registros criptografados. Nenhuma alteração realizada.");
+        setRecoveryMessage("A chave informada não corresponde às configurações recuperáveis deste banco. Nenhuma alteração foi realizada. Confirme se selecionou o .env original usado para salvar as integrações.");
         return;
       }
-      const result = await window.techLeadHub.configuration.recoverKey(recoveryKey);
-      setRecoveryMessage(result.saved ? "Chave armazenada com segurança. O Desktop será reiniciado." : "Operação cancelada. Nenhuma chave alterada.");
+      const result = await window.techLeadHub.configuration.recoverKey(recoveryKey, !validation.data.candidateVerified);
+      setRecoveryMessage(result.saved ? "Chave armazenada com segurança. O Desktop será reiniciado e, se necessário, migrará os registros legados recuperáveis." : "Operação cancelada. Nenhuma chave alterada.");
       if (result.saved) setRecoveryKey("");
     } catch {
       setRecoveryMessage("Falha na validação ou no armazenamento seguro. Nenhuma configuração foi substituída.");
     } finally {
       setRecoveringKey(false);
+    }
+  }
+
+  async function importRecoveryKey() {
+    if (!isAdmin || !window.techLeadHub?.configuration?.importEnv) return;
+    setRecoveryMessage(null);
+    try {
+      const imported = await window.techLeadHub.configuration.importEnv();
+      const candidate = imported?.systemConfigKey?.trim() ?? "";
+      if (!candidate) {
+        setRecoveryMessage("O arquivo selecionado não contém SYSTEM_CONFIG_KEY. Nenhuma configuração foi alterada.");
+        return;
+      }
+      setRecoveryKey(candidate);
+      setRecoveryMessage("Chave importada localmente. Clique em Validar e recuperar para confirmar e armazenar neste Desktop.");
+    } catch {
+      setRecoveryMessage("Não foi possível ler o arquivo .env. Nenhuma configuração foi alterada.");
     }
   }
 
@@ -256,45 +365,6 @@ export function Settings() {
     try { setStartupSaving(true); setError(null); const state=await window.techLeadHub.startup.set(enabled); setStartupEnabled(state.enabled); setSuccess(state.enabled ? "Hub Suporte Simer será iniciado automaticamente com o Windows." : "Inicialização automática com o Windows desativada."); }
     catch { setError("Não foi possível alterar a inicialização com o Windows."); }
     finally { setStartupSaving(false); }
-  }
-
-  async function loadConfiguration() {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const [configResult, sessionsResult, diagnosticsResult] = await Promise.allSettled([
-        api.get<ConfigurationState>("/system-settings"),
-        api.get<{ sessions: ActiveSession[] }>("/sessions"),
-        api.get<Diagnostics>("/system-settings/diagnostics"),
-      ]);
-      if (sessionsResult.status === "fulfilled") setSessions(sessionsResult.value.data.sessions);
-      if (diagnosticsResult.status === "fulfilled") setDiagnostics(diagnosticsResult.value.data);
-      if (configResult.status === "rejected") {
-        setConfiguration(null);
-        throw new Error("Não foi possível verificar as configurações das integrações. Nenhuma credencial foi alterada. Confira o diagnóstico do backend.");
-      }
-      const current = configResult.value.data;
-      setConfiguration(current);
-      setForm((previous) => ({
-        ...previous,
-        organization: current.organization ?? "",
-        project: current.project ?? "",
-        wiki: current.wiki ?? "",
-        movideskUrl: current.movideskUrl ?? "https://api.movidesk.com/public/v1",
-      }));
-      if (sessionsResult.status === "rejected" || diagnosticsResult.status === "rejected") {
-        setError("As configurações foram carregadas, mas o diagnóstico de sessões ou plataforma está temporariamente indisponível.");
-      }
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Não foi possível carregar as configurações.",
-      );
-    } finally {
-      setLoading(false);
-    }
   }
 
   async function revokeSession(sessionId: number) {
@@ -335,12 +405,20 @@ export function Settings() {
         return;
       }
 
-      setForm({
-        ...EMPTY_FORM,
-        ...imported,
+      // A importação apenas prepara a revisão: não grava credenciais nem substitui
+      // campos existentes por valores vazios de um .env incompleto.
+      const supported = ["databaseUrl", "organization", "project", "wiki", "pat", "movideskToken", "movideskUrl"] as const;
+      const recovered = supported.filter((key) => typeof imported[key] === "string" && imported[key].trim().length > 0);
+      if (!recovered.length) {
+        throw new Error("O arquivo não contém configurações reconhecidas de banco, Azure ou Movidesk.");
+      }
+      setForm((current) => {
+        const next = { ...current };
+        for (const key of recovered) next[key] = imported[key] ?? current[key];
+        return next;
       });
       setSuccess(
-        "Arquivo carregado. Revise os dados e clique em Salvar configurações.",
+        `Arquivo lido localmente: ${recovered.length} campo(s) reconhecido(s). Revise as credenciais antes de salvar. A importação não altera a configuração até sua confirmação.`,
       );
     } catch (importError) {
       setError(
@@ -510,6 +588,7 @@ export function Settings() {
   }
 
   async function saveConfiguration() {
+    if (!isAdmin) return;
     try {
       setSaving(true);
       setError(null);
@@ -518,6 +597,7 @@ export function Settings() {
       const response = await api.put<ConfigurationState & { restartRequired: boolean }>(
         "/system-settings",
         {
+          weatherApiKey: form.weatherApiKey,
           organization: form.organization,
           project: form.project,
           wiki: form.wiki,
@@ -536,7 +616,7 @@ export function Settings() {
       }
 
       setConfiguration(result);
-      setForm(current => ({ ...current, organization: result.organization, project: result.project, wiki: result.wiki, pat: "", movideskToken: "", movideskUrl: result.movideskUrl }));
+      setForm(current => ({ ...current, organization: result.organization, project: result.project, wiki: result.wiki, weatherApiKey: "", pat: "", movideskToken: "", movideskUrl: result.movideskUrl }));
 
       setSuccess(
         result.restartRequired
@@ -550,36 +630,70 @@ export function Settings() {
     }
   }
 
+  async function saveTeamsWorkflows() {
+    if (!isAdmin) return;
+    try {
+      setSavingTeamsWorkflows(true);
+      setError(null);
+      setSuccess(null);
+      const response = await api.put<ConfigurationState>("/system-settings/teams-workflows", {
+        supportTicketsEnabled: teamsWorkflowForm.supportTicketsEnabled,
+        ...(teamsWorkflowForm.supportTicketsWebhookUrl.trim() ? { supportTicketsWebhookUrl: teamsWorkflowForm.supportTicketsWebhookUrl.trim() } : {}),
+        taskCreatedEnabled: teamsWorkflowForm.taskCreatedEnabled,
+        ...(teamsWorkflowForm.taskCreatedWebhookUrl.trim() ? { taskCreatedWebhookUrl: teamsWorkflowForm.taskCreatedWebhookUrl.trim() } : {}),
+        taskRegistroEnabled: teamsWorkflowForm.taskRegistroEnabled,
+        ...(teamsWorkflowForm.taskRegistroWebhookUrl.trim() ? { taskRegistroWebhookUrl: teamsWorkflowForm.taskRegistroWebhookUrl.trim() } : {}),
+        ticketBaseUrl: teamsWorkflowForm.ticketBaseUrl.trim(),
+      });
+      setConfiguration(response.data);
+      setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: "", taskCreatedWebhookUrl: "", taskRegistroWebhookUrl: "", ticketBaseUrl: response.data.teamsWorkflows?.ticketBaseUrl ?? current.ticketBaseUrl }));
+      setSuccess("Fluxos do Teams atualizados. As alterações são aplicadas sem reiniciar o Hub.");
+    } catch (saveError) {
+      setError(getApiErrorMessage(saveError, "Não foi possível salvar os fluxos do Teams."));
+    } finally {
+      setSavingTeamsWorkflows(false);
+    }
+  }
+
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-        <CircularProgress size={32} />
-      </Box>
-    );
+    return <ContentState kind="loading" title="Carregando configurações" minHeight={360} />;
   }
 
   return (
     <Box>
-      <PageHeader eyebrow="Administração" title="Configurações" description="Administração central do TechLead Hub: integrações, sincronizações, acesso e saúde das fontes de dados." />
+      <PageHeader eyebrow="Administração" title="Configurações" description={isAdmin ? "Administração central do TechLead Hub: integrações, sincronizações, acesso e saúde das fontes de dados." : "Consulte o estado das integrações e configurações do TechLead Hub. Alterações são realizadas pelo administrador."} />
+      {!isAdmin && <Alert severity="info" sx={{ mb: 2 }}>Visualização somente leitura. Solicite ao administrador qualquer alteração nas integrações ou configurações.</Alert>}
       <Card variant="outlined" sx={{ mb: 2, borderRadius: 3 }}>
         <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-            <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral & Acessos</Button>
-            <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>
+            <Button startIcon={<StorageOutlined />} variant={section === "general" ? "contained" : "text"} onClick={() => { setSection("general"); window.history.replaceState(null, "", "/configuracoes"); }}>Geral</Button>
+            {isAdmin && <Button variant={section === "team" ? "contained" : "text"} onClick={() => { setSection("team"); window.history.replaceState(null, "", "/configuracoes#equipe"); }}>Equipe & Permissões</Button>}
+            {isAdmin && <Button startIcon={<SyncOutlined />} variant={section === "data" ? "contained" : "text"} onClick={() => { setSection("data"); window.history.replaceState(null, "", "/configuracoes#dados"); }}>Dados & Sincronizações</Button>}
           </Stack>
         </CardContent>
       </Card>
-      {section === "data" ? <Import embedded /> : <>
-      <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
+      {isAdmin && section === "data" ? <Import embedded /> : <>
+      {isAdmin && section === "team" && <Users embedded />}
+      {isAdmin && section === "team" && <Card variant="outlined" sx={{ mb: 2, mt: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Permissões por usuário</Typography>
         <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Defina exatamente quais rotinas cada usuário pode acessar. Administradores permanecem com acesso integral.</Typography>
         <FormControl fullWidth size="small" sx={{mb:1.5}}><InputLabel shrink id="settings-select-1-label">Usuário</InputLabel><Select labelId="settings-select-1-label" inputProps={{ id: "settings-select-1", "aria-labelledby": "settings-select-1-label" }} label="Usuário" value={permissionUserId} onChange={e=>setPermissionUserId(Number(e.target.value))} displayEmpty><MenuItem value=""><em>Selecione um usuário</em></MenuItem>{permissionUsers.map(user=><MenuItem key={user.id} value={user.id}>{user.name} · {user.role}</MenuItem>)}</Select></FormControl>
-        {permissionUserId!=="" && (()=>{const selected=permissionUsers.find(user=>user.id===permissionUserId);if(!selected)return null;if(selected.role==="ADMIN")return <Alert severity="info">Administradores possuem acesso integral a todas as rotinas.</Alert>;const explicit=Array.isArray(selected.permissions);const defaults=selected.role==="COORDENADOR"?ROUTINE_PERMISSIONS.map(([key])=>key):["dashboard","tickets","known-problems","attention","clients","reports","corrections","evolutions","support","versions","knowledge"];const active=explicit?selected.permissions!:defaults;return <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))"},gap:.5}}>{ROUTINE_PERMISSIONS.map(([key,label])=><Stack key={key} direction="row" sx={{alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider",py:.55}}><Typography variant="body2">{label}</Typography><Switch size="small" disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/></Stack>)}</Box>})()}
-      </CardContent></Card>
+        {permissionUserId!=="" && (()=>{const selected=permissionUsers.find(user=>user.id===permissionUserId);if(!selected)return null;if(selected.role==="ADMIN")return <Alert severity="info">Administradores possuem acesso integral a todas as rotinas.</Alert>;const explicit=Array.isArray(selected.permissions);const defaults=selected.role==="COORDENADOR"?ROUTINE_PERMISSIONS.map(([key])=>key).filter(key=>!["coordination","technical-leadership"].includes(key)):["dashboard","tickets","known-problems","attention","clients","reports","corrections","evolutions","support","versions","knowledge"];const active=explicit?selected.permissions!:defaults;return <Stack spacing={1.5}>
+          <Alert severity="info" variant="outlined">Acesso restrito: Central da Coordenação e Liderança Técnica são liberadas individualmente. Por padrão, somente administradores acessam essas telas. Conceda as duas permissões apenas ao usuário autorizado.</Alert>
+          <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",md:"repeat(2,minmax(0,1fr))"},gap:1}}>
+            {ROUTINE_PERMISSIONS.map(([key,label])=>{const restricted=["coordination","technical-leadership"].includes(key);return <Stack key={key} direction="row" spacing={1} sx={{alignItems:"center",justifyContent:"space-between",border:"1px solid",borderColor:restricted?"warning.main":"divider",borderRadius:2,px:1.5,py:1.1,bgcolor:restricted?"action.hover":"background.paper",transition:"border-color .2s, background-color .2s","&:hover":{borderColor:"primary.main"}}}>
+              <Box sx={{minWidth:0}}><Typography variant="body2" sx={{fontWeight:restricted?800:600}}>{label}</Typography>{restricted&&<Typography variant="caption" color="warning.main">Acesso sensível · liberação individual</Typography>}</Box>
+              <Switch size="small" slotProps={{input: {"aria-label":`Permitir ${label} para ${selected.name}`}}} disabled={permissionSaving} checked={active.includes(key)} onChange={(_,checked)=>{const next=checked?[...active,key]:active.filter(item=>item!==key);void saveUserPermissions(selected.id,next)}}/>
+            </Stack>})}
+          </Box>
+          <Typography variant="caption" color="text.secondary">As alterações são salvas no servidor e passam a valer nas APIs imediatamente. Ao mudar o perfil de um usuário, as permissões específicas anteriores são redefinidas.</Typography>
+        </Stack>})()}
+      </CardContent></Card>}
 
+      {section === "general" && <>
       <Card variant="outlined" sx={{ mb: 2 }}><CardContent>
         <Typography sx={{fontWeight:850}}>Notificações</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos podem gerar avisos. Estas preferências também controlam os alertas rápidos no canto inferior direito.</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{mt:.4,mb:1.5}}>Escolha quais eventos ficam visíveis neste dispositivo e quais sons são reproduzidos. No sino, você também pode configurar preferências da conta, sincronizadas entre dispositivos.</Typography>
         <Stack>{([["sound","Som das notificações"],["chat","Chat e menções"],["operation","Alertas operacionais e problemas conhecidos"],["appVersion","Novas versões do Hub Suporte Simer"],["simerVersion","Novas versões do SIMER"],["azureCompleted","Correções, Evoluções e APOIOs concluídos"],["azureUpdated","Alterações em Correções, Evoluções e APOIOs"]] as Array<[keyof LocalNotificationPreferences,string]>).map(([key,label])=><Stack key={key} direction="row" sx={{py:.75,alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid",borderColor:"divider"}}><Typography variant="body2">{label}</Typography><Switch size="small" checked={notificationPreferences[key]} onChange={(_,enabled)=>changeNotificationPreference(key,enabled)}/></Stack>)}</Stack>
       </CardContent></Card>
 
@@ -601,27 +715,30 @@ export function Settings() {
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{ xs: "column", sm: "row" }} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }} spacing={1}>
               <Typography sx={{ fontWeight: 800 }}>Diagnóstico da plataforma</Typography>
-              <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
+              {isAdmin && <Button size="small" variant="outlined" disabled={credentialHealthBusy} startIcon={credentialHealthBusy ? <CircularProgress size={15} /> : <StorageOutlined />} onClick={() => void diagnoseCredentials()}>
                 {credentialHealthBusy ? "Verificando..." : "Diagnosticar credenciais"}
-              </Button>
+              </Button>}
             </Stack>
-            {window.techLeadHub?.configuration?.recoverKey && credentialHealth?.status === "incompatible" && (
+            {isAdmin && window.techLeadHub?.configuration?.recoverKey && (
               <Stack spacing={1.25} sx={{ mt: 2 }}>
-                <Typography sx={{ fontWeight: 750 }}>Recuperação administrativa de credenciais</Typography>
+                <Typography sx={{ fontWeight: 750 }}>Recuperar integrações neste computador</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Informe a chave original que consegue ler as seis integrações. O valor será verificado no servidor e armazenado no Windows somente após confirmação. Não use uma chave nova aleatória nem cole segredos em logs.
+                  Se Azure ou Movidesk não carregarem após instalar ou atualizar, importe a SYSTEM_CONFIG_KEY original do arquivo .env. A chave será validada com os registros do banco antes de ser armazenada com proteção do Windows. Não use uma chave nova.
                 </Typography>
+                <Button variant="outlined" startIcon={<FileUploadOutlined />} onClick={() => void importRecoveryKey()} disabled={recoveringKey}>
+                  Importar chave do arquivo .env
+                </Button>
                 <TextField
                   size="small"
                   type="password"
                   fullWidth
                   autoComplete="off"
-                  label="Chave original de criptografia"
+                  label="SYSTEM_CONFIG_KEY original"
                   value={recoveryKey}
                   onChange={(event) => setRecoveryKey(event.target.value)}
                 />
                 <Button variant="contained" disabled={recoveringKey || recoveryKey.length < 32} onClick={() => void recoverDesktopKey()}>
-                  {recoveringKey ? "Validando..." : "Validar e recuperar no Desktop"}
+                  {recoveringKey ? "Validando..." : "Validar e recuperar neste computador"}
                 </Button>
                 {recoveryMessage && <Alert severity="info">{recoveryMessage}</Alert>}
               </Stack>
@@ -641,7 +758,7 @@ export function Settings() {
           </CardContent>
         </Card>
 
-        <Box component="details" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, overflow: "hidden", "& summary": { cursor: "pointer", px: 2.5, py: 1.5, fontWeight: 750, bgcolor: "background.paper" } }}>
+        {isAdmin && <Box component="details" sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5, overflow: "hidden", "& summary": { cursor: "pointer", px: 2.5, py: 1.5, fontWeight: 750, bgcolor: "background.paper" } }}>
           <Box component="summary">Sessões e dispositivos · ${sessions.length} ativa(s) · Administração avançada</Box>
         <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
@@ -652,9 +769,9 @@ export function Settings() {
         </Card>
 
 
-        </Box>
+        </Box>}
 
-        {window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
+        {isAdmin && window.techLeadHub?.platform === "win32" && window.techLeadHub.startup && <Card elevation={0} sx={{ border: "1px solid", borderColor: startupEnabled ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5, background: startupEnabled ? "linear-gradient(120deg,rgba(24,199,122,.055),transparent)" : undefined }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{xs:"column",sm:"row"}} spacing={2} sx={{alignItems:{sm:"center"},justifyContent:"space-between"}}>
               <Box><Typography sx={{fontWeight:850}}>Inicialização com o Windows</Typography><Typography variant="body2" color="text.secondary">Mantenha o Hub Suporte Simer disponível desde o início da sessão para receber atualizações e avisos operacionais.</Typography></Box>
@@ -721,15 +838,24 @@ export function Settings() {
               }
               placeholder={
                 configuration?.databaseConfigured
-                  ? "Deixe vazio para manter a conexão atual"
-                  : "postgresql://usuario:senha@servidor:5432/banco"
+                  ? "Banco configurado · endereço oculto"
+                  : "Não configurado"
               }
+              disabled={!isAdmin}
               autoComplete="new-password"
               helperText="A conexão atual não é exibida por segurança."
             />
           </CardContent>
         </Card>}
 
+        <Card variant="outlined" sx={{borderRadius:2.5}}><CardContent sx={{p:{xs:2,md:2.5}}}>
+          <Typography sx={{fontWeight:800}}>Previsão do tempo</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>Chave compartilhada entre Web e Desktop. A cidade continua individual, no calendário de cada usuário.</Typography>
+          <TextField fullWidth type="password" label="Nova chave WeatherAPI" value={form.weatherApiKey} disabled={!isAdmin}
+            onChange={event=>updateField("weatherApiKey",event.target.value)} autoComplete="new-password"
+            placeholder={configuration?.weatherConfigured?"Chave configurada · valor oculto":"Não configurada"}
+            helperText={configuration?.weatherCredentialSource==="environment"?"Chave somente no ambiente deste serviço. Salve uma chave central para disponibilizar também nas instalações Desktop.":"Validada ao salvar e armazenada criptografada no banco. Não é incorporada ao instalador."}/>
+        </CardContent></Card>
         <Card
           elevation={0}
           sx={{
@@ -791,6 +917,7 @@ export function Settings() {
               <TextField
                 label="Organização"
                 value={form.organization}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("organization", event.target.value)
                 }
@@ -800,6 +927,7 @@ export function Settings() {
               <TextField
                 label="Projeto"
                 value={form.project}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("project", event.target.value)
                 }
@@ -809,6 +937,7 @@ export function Settings() {
               <TextField
                 label="Wiki"
                 value={form.wiki}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("wiki", event.target.value)
                 }
@@ -818,35 +947,36 @@ export function Settings() {
                 type="password"
                 label="Novo PAT"
                 value={form.pat}
+                disabled={!isAdmin}
                 onChange={(event) =>
                   updateField("pat", event.target.value)
                 }
                 autoComplete="new-password"
                 placeholder={
                   configuration?.patConfigured
-                    ? "Deixe vazio para manter o PAT atual"
-                    : "Informe o Personal Access Token"
+                    ? "PAT configurado · valor oculto"
+                    : "Não configurado"
                 }
                 helperText={configuration?.azureCredentialSource === "central"
                   ? "PAT salvo no Hub. Esta configuração prevalece sobre o .env do serviço."
                   : configuration?.azureCredentialSource === "environment" ? "PAT carregado do ambiente do serviço. Preencha para salvar uma nova credencial no Hub." : "Informe um PAT com leitura de Work Items e acesso ao projeto."}
               />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
+            {isAdmin && <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end" }}>
               <Button variant="outlined" disabled={saving || testingAzure || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection()}>
                 {testingAzure ? "Testando..." : form.pat.trim() ? "Testar novo PAT" : "Testar conexão atual"}
               </Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Ao alterar PAT, organização ou projeto, o Hub valida a conexão antes de salvar. Uma resposta de login ou HTML não confirma acesso à API.
             </Typography>
             <Divider sx={{ my: 2 }} />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { sm: "center" } }}>
+            {isAdmin && <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} sx={{ alignItems: { sm: "center" } }}>
               <TextField label="Mês do relatório" type="month" value={azureHistoryMonth} onChange={event => setAzureHistoryMonth(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} sx={{ minWidth: 210 }} />
               <Button variant="outlined" disabled={saving || testingAzure || !azureHistoryMonth || (!configuration?.patConfigured && !form.pat.trim())} onClick={() => void testAzureConnection(true)}>
                 {testingAzure ? "Testando..." : "Testar histórico do mês"}
               </Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Verifica os mesmos campos, revisões e snapshots de abertura/fechamento usados pelo report. O teste usa uma amostra e não aprova os totais do mês.
             </Typography>
@@ -865,6 +995,51 @@ export function Settings() {
           </CardContent>
         </Card>
 
+        <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Typography sx={{ fontWeight: 800 }}>Notificações de fluxos do Teams</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              Processos independentes do alerta AgriQ. As URLs dos Workflows são armazenadas criptografadas e nunca retornam à tela; deixe esses campos vazios para manter as URLs cadastradas.
+            </Typography>
+            {!configuration?.teamsWorkflows?.ticketBaseUrlConfigured && <Alert severity="warning" sx={{ mt: 1.5 }}>
+              Informe a URL base do Movidesk abaixo para habilitar os links de atendimento nos cards.
+            </Alert>}
+            <TextField
+              fullWidth
+              disabled={!isAdmin}
+              label="URL base do Movidesk"
+              value={teamsWorkflowForm.ticketBaseUrl}
+              onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, ticketBaseUrl: event.target.value }))}
+              placeholder="https://suporte.aliare.co"
+              helperText="Usada para montar os links Ticket/Edit/{id} nos cards; compartilhada entre as instalações."
+              sx={{ mt: 2 }}
+            />
+            <Divider sx={{ my: 2 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(260px, .8fr) minmax(300px, 1.2fr)" }, gap: 2, alignItems: "center" }}>
+              <FormControlLabel
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.supportTicketsEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Ticket Novo na carteira SIMER</Typography><Typography variant="caption" color="text.secondary">Grupo Suporte SIMER | Cooperativa</Typography></Box>}
+              />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow de tickets" value={teamsWorkflowForm.supportTicketsWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, supportTicketsWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.supportTicketsWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+
+              <FormControlLabel
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.taskCreatedEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task Azure criada pelo N3</Typography><Typography variant="caption" color="text.secondary">Somente tasks vinculadas a atendimento</Typography></Box>}
+              />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow de tasks criadas" value={teamsWorkflowForm.taskCreatedWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskCreatedWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.taskCreatedWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow do Teams."} />
+
+              <FormControlLabel
+                control={<Switch disabled={!isAdmin} checked={teamsWorkflowForm.taskRegistroEnabled} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroEnabled: event.target.checked }))} />}
+                label={<Box><Typography variant="body2" sx={{ fontWeight: 750 }}>Task retornou para Registro</Typography><Typography variant="caption" color="text.secondary">Cada retorno observado avisa o grupo N3</Typography></Box>}
+              />
+              <TextField disabled={!isAdmin} type="password" autoComplete="new-password" label="URL do Workflow do N3 · Registro" value={teamsWorkflowForm.taskRegistroWebhookUrl} onChange={(event) => setTeamsWorkflowForm((current) => ({ ...current, taskRegistroWebhookUrl: event.target.value }))} placeholder={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "Configurada · valor oculto" : "Não configurada"} helperText={configuration?.teamsWorkflows?.taskRegistroWebhookConfigured ? "URL já configurada; valor oculto." : "URL HTTPS fornecida pelo Workflow específico do N3."} />
+            </Box>
+            {isAdmin && <Stack direction="row" sx={{ mt: 2, justifyContent: "flex-end" }}>
+              <Button variant="contained" disabled={savingTeamsWorkflows} onClick={() => void saveTeamsWorkflows()}>{savingTeamsWorkflows ? "Salvando fluxos..." : "Salvar fluxos do Teams"}</Button>
+            </Stack>}
+          </CardContent>
+        </Card>
+
         <Card elevation={0} sx={{ border: "1px solid", borderColor: configuration?.movideskConfigured ? "rgba(24,199,122,.28)" : "divider", borderRadius: 2.5 }}>
           <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
@@ -876,14 +1051,14 @@ export function Settings() {
             </Stack>
             <Divider sx={{ my: 2 }} />
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-              <TextField label="Endpoint da API" value={form.movideskUrl} onChange={(event) => updateField("movideskUrl", event.target.value)} />
-              <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Deixe vazio para manter o token atual" : "Cole o token recebido"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
+              <TextField label="Endpoint da API" value={form.movideskUrl} disabled={!isAdmin} onChange={(event) => updateField("movideskUrl", event.target.value)} />
+              <TextField type="password" label="Novo token Movidesk" value={form.movideskToken} disabled={!isAdmin} onChange={(event) => updateField("movideskToken", event.target.value)} autoComplete="new-password" placeholder={configuration?.movideskConfigured ? "Token configurado · valor oculto" : "Não configurado"} helperText="O token atual nunca é exibido e fica criptografado no banco." />
             </Box>
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end", flexWrap: "wrap" }}>
+            {isAdmin && <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: "flex-end", flexWrap: "wrap" }}>
               <Button variant="outlined" disabled={saving || testingMovidesk || (!configuration?.movideskConfigured && !form.movideskToken.trim())} onClick={() => void testMovideskConnection()}>{testingMovidesk ? "Testando..." : form.movideskToken.trim() ? "Testar novo token" : "Testar conexão atual"}</Button>
               <Button variant="outlined" disabled={saving || previewingMovidesk || !configuration?.movideskConfigured || Boolean(form.movideskToken.trim())} onClick={() => void previewMovidesk()}>{previewingMovidesk ? "Validando amostra..." : "Validar amostra (25)"}</Button>
               <Button variant="contained" disabled={saving || testingMovidesk || previewingMovidesk || !form.movideskToken.trim()} onClick={() => void saveAndTestMovidesk()}>{saving ? "Validando e salvando..." : "Validar e substituir token"}</Button>
-            </Stack>
+            </Stack>}
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               Um novo token só substitui a credencial atual após validação bem-sucedida. Em caso de erro, o token anterior é preservado.
             </Typography>
@@ -893,7 +1068,7 @@ export function Settings() {
                   <Typography sx={{ fontWeight: 800 }}>Baseline Movidesk</Typography>
                   <Typography variant="body2" color="text.secondary">{movideskBaseline?.completed ? `Concluído · ${movideskBaseline.database.tickets} tickets na base` : movideskBaseline?.status === "RUNNING" ? "Carga FULL em execução em segundo plano." : "Pronto para a primeira carga completa."}</Typography>
                 </Box>
-                <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed || !movideskPreview?.validForImport} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>
+                {isAdmin && <Button variant="contained" disabled={baselineBusy || movideskBaseline?.status === "RUNNING" || movideskBaseline?.completed || !movideskPreview?.validForImport} onClick={() => void startMovideskBaseline()}>{movideskBaseline?.status === "RUNNING" ? "FULL em execução" : movideskBaseline?.completed ? "Baseline concluído" : "Iniciar carga FULL"}</Button>}
               </Stack>
               {movideskBaseline?.result && <Typography variant="body2" sx={{ mt: 1 }}>Páginas: <b>{movideskBaseline.result.pages}</b> · Lidos: <b>{movideskBaseline.result.totalRows}</b> · Novos: <b>{movideskBaseline.result.created}</b> · Atualizados: <b>{movideskBaseline.result.updated}</b> · Erros: <b>{movideskBaseline.result.errors}</b></Typography>}
               {!movideskPreview?.validForImport && !movideskBaseline?.completed && <Alert severity="info" sx={{ mt: 1 }}>Valide a amostra da API para liberar a primeira carga FULL.</Alert>}
@@ -914,12 +1089,12 @@ export function Settings() {
                         {movideskCoverage.enrichment.pending} pendente(s) · {movideskCoverage.enrichment.errors} com erro · scheduler incremental em lotes controlados
                       </Typography>
                     </Box>
-                    <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
+                    {isAdmin && <Button size="small" variant="outlined" disabled={enrichmentBusy || !movideskBaseline?.completed} onClick={() => void syncMovideskEnrichment()}>
                       {enrichmentBusy ? "Enriquecendo..." : "Processar próximo lote"}
-                    </Button>
-                    <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
+                    </Button>}
+                    {isAdmin && <Button size="small" variant="text" disabled={causeBackfillBusy || !movideskBaseline?.completed} onClick={() => void backfillMovideskCauses()}>
                       {causeBackfillBusy ? "Consolidando causas..." : "Consolidar causas e motivos 2026+"}
-                    </Button>
+                    </Button>}
                   </Stack>
                   <Box sx={{ mt: 1.25, display: "grid", gridTemplateColumns: { xs: "repeat(2,minmax(0,1fr))", md: "repeat(4,minmax(0,1fr))" }, gap: 1 }}>
                     {[
@@ -990,16 +1165,16 @@ export function Settings() {
           spacing={1.5}
           sx={{ justifyContent: "flex-end" }}
         >
-          {window.techLeadHub && configuration?.runtime !== "web" && <Button
+          {isAdmin && window.techLeadHub && configuration?.runtime !== "web" && <Button
             variant="outlined"
             startIcon={<FileUploadOutlined />}
             disabled={saving}
             onClick={() => void importEnvironment()}
           >
-            Importar .env
+            Recuperar configurações (.env)
           </Button>}
 
-          <Button
+          {isAdmin && <Button
             variant="contained"
             startIcon={
               saving
@@ -1010,9 +1185,10 @@ export function Settings() {
             onClick={() => void saveConfiguration()}
           >
             {saving ? "Salvando..." : "Salvar configurações"}
-          </Button>
+          </Button>}
         </Stack>
       </Stack>
+      </>}
       </>}
     </Box>
   );

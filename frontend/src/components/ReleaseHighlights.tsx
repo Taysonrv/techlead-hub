@@ -19,13 +19,16 @@ import {
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { aliareColors } from "../theme/theme";
 import { FALLBACK_APP_VERSION, getReleaseNote } from "../config/releaseNotes";
 
-const STORAGE_PREFIX = "techlead-hub:release-seen:";
+const STORAGE_PREFIX = "techlead-hub:release-seen:v2:";
 
 export function ReleaseHighlights() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [version, setVersion] = useState("");
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -33,6 +36,7 @@ export function ReleaseHighlights() {
   useEffect(() => {
     let active = true;
     async function resolveVersion() {
+      if (!userId) return;
       let current = FALLBACK_APP_VERSION;
       try {
         current = (await window.techLeadHub?.getVersion?.()) || current;
@@ -43,19 +47,29 @@ export function ReleaseHighlights() {
       setVersion(current);
       const note = getReleaseNote(current);
       if (!note) return;
-      if (window.localStorage.getItem(`${STORAGE_PREFIX}${current}`) === "1") return;
+      let alreadySeen = false;
+      try {
+        alreadySeen = window.localStorage.getItem(`${STORAGE_PREFIX}${userId}:${current}`) === "1";
+      } catch {
+        // Se o armazenamento local estiver indisponível, priorize mostrar as novidades.
+      }
+      if (alreadySeen) return;
       setStep(0);
       setOpen(true);
     }
     void resolveVersion();
     return () => { active = false; };
-  }, []);
+  }, [userId]);
 
   const release = useMemo(() => getReleaseNote(version), [version]);
   if (!release) return null;
 
   function acknowledge() {
-    window.localStorage.setItem(`${STORAGE_PREFIX}${version}`, "1");
+    try {
+      if (userId) window.localStorage.setItem(`${STORAGE_PREFIX}${userId}:${version}`, "1");
+    } catch {
+      // A confirmação visual continua válida mesmo se o armazenamento estiver indisponível.
+    }
     setOpen(false);
     setStep(0);
   }
@@ -144,7 +158,7 @@ export function ReleaseHighlights() {
         {step === 0 ? (
           <>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2,minmax(0,1fr))" }, gap: 1.25 }}>
-              {release.items.slice(0, 6).map((item, index) => (
+              {release.items.map((item, index) => (
                 <Box key={item.title} sx={{ p: 1.6, border: "1px solid", borderColor: "divider", borderRadius: 2.5, bgcolor: "background.paper", minWidth: 0 }}>
                   <Stack direction="row" spacing={1.25} sx={{ alignItems: "flex-start" }}>
                     <Box sx={{ width: 28, height: 28, flexShrink: 0, borderRadius: 2, display: "grid", placeItems: "center", fontWeight: 900, fontSize: ".72rem", color: aliareColors.greenDark, bgcolor: "rgba(24,199,122,.10)" }}>

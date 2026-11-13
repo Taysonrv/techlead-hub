@@ -9,7 +9,8 @@ intelligenceRoutes.use(requireAnyPermission("dashboard","tickets","attention","c
 intelligenceRoutes.get("/overview",async(req:AuthenticatedRequest,res)=>{
   try{
     const days=Number(req.query.days??90);
-    res.json(await operationalIntelligenceService.overview(Number.isFinite(days)?days:90));
+    const period=req.query.period==="month"?"month":undefined;
+    res.json(await operationalIntelligenceService.overview(Number.isFinite(days)?days:90,period));
   }catch(error){
     console.error("[intelligence] overview",error);
     res.status(500).json({error:"Não foi possível gerar a inteligência operacional."});

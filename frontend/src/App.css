@@ -27,8 +27,22 @@
   width: 100%;
 }
 
+/* A rolagem horizontal pertence às tabelas e aos gráficos, não à página inteira. */
 @media (max-width: 900px) {
-  .main-content {
-    overflow-x: auto;
+  .main-content,
+  .dashboard-container,
+  .dashboard-grid {
+    min-width: 0;
+    max-width: 100%;
   }
+
+  .main-content {
+    overflow-x: clip;
+  }
+}
+
+/* Elementos de conteúdo não devem forçar a largura do Dashboard. */
+.dashboard-grid > *,
+.dashboard-container > * {
+  min-width: 0;
 }

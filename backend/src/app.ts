@@ -26,7 +26,7 @@ app.use((req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
-  res.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https://cdn.weatherapi.com; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://login.microsoftonline.com https://graph.microsoft.com");
   if (req.path.startsWith("/api/")) res.setHeader("Cache-Control", "no-store, max-age=0");
   if (req.secure) res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   next();
@@ -172,6 +172,7 @@ app.get("/health", (_req, res) => {
     status: databaseReady ? "ok" : "degraded",
     database: databaseReady ? "ready" : "unavailable",
     scheduler: databaseReady ? "enabled" : "disabled",
+    integrationsConfiguration: process.env.APP_INTEGRATIONS_CONFIG_STATUS ?? "unknown",
     timestamp: new Date().toISOString(),
   });
 });
@@ -319,16 +320,17 @@ app.use(
     res: express.Response,
     _next: express.NextFunction
   ) => {
-    console.error(
-      "[server] Erro não tratado:",
-      error
-    );
-
-    if (
-      res.headersSent
-    ) {
+    if (res.headersSent) {
       return;
     }
+
+    // Preserva o contrato legado { error: string }, mas diferencia payloads
+    // excessivos de falhas internas e evita registrar o conteúdo recebido.
+    if (error instanceof Error && "type" in error && error.type === "entity.too.large") {
+      return res.status(413).json({ error: "O conteúdo enviado excede o limite permitido." });
+    }
+
+    console.error("[server] Erro não tratado:", error instanceof Error ? error.name : "erro desconhecido");
 
     return res
       .status(500)

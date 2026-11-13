@@ -139,6 +139,13 @@ export function simerClientTicketScope(): Prisma.TicketWhereInput {
  * Cliente, produto e responsável precisam pertencer à carteira operacional.
  */
 
+export const CONDITIONAL_SUPPORT_CLIENTS = ["SIAGRI SISTEMAS"] as const;
+
+/** SIAGRI Sistemas is included only when assigned to a named SIMER support analyst. */
+export function isConditionalSupportTicket(client: string | null | undefined, owner: string | null | undefined): boolean {
+  return Boolean(client && CONDITIONAL_SUPPORT_CLIENTS.some(name => normalizeClientScopeValue(client).startsWith(normalizeClientScopeValue(name))) && isSupportAnalyst(owner));
+}
+
 export const SIMER_EXCLUDED_PRODUCTS = ["AGB", "CLOVER", "SIAGRI WEB"] as const;
 
 export function simerSupportTicketScope(includeDeleted = false): Prisma.TicketWhereInput {
@@ -171,8 +178,52 @@ export function simerSupportTicketScope(includeDeleted = false): Prisma.TicketWh
   };
 }
 
+/**
+ * Movidesk dashboard export parity: event history must include older tickets and
+ * other service trees handled by the same SIMER support agents. Do not apply
+ * the strict current-service or created-since-2026 operational filter here.
+ * This scope is intentionally limited to SIMER client accounts and support owners.
+ */
+export function movideskDashboardScope(): Prisma.TicketWhereInput {
+  return {
+    AND: [
+      { isDeleted: false },
+      {
+        OR: [
+          { client: { in: [...SIMER_CLIENTS], mode: "insensitive" }, owner: { in: [...SUPPORT_ANALYSTS, "SUPORTE SIMER | BDS"], mode: "insensitive" } },
+          { client: { startsWith: "SIAGRI SISTEMAS", mode: "insensitive" }, owner: { in: [...SUPPORT_ANALYSTS], mode: "insensitive" } },
+        ],
+      },
+    ],
+  };
+}
+
 export function ticketOperationalScope(includeDeleted = false): Prisma.TicketWhereInput {
   return simerSupportTicketScope(includeDeleted);
+}
+
+export type OperationalSupportTicketSnapshot = {
+  createdDate: Date;
+  client: string | null;
+  owner: string | null;
+  service: string | null;
+  serviceFirstLevel: string | null;
+  serviceSecondLevel: string | null;
+  serviceThirdLevel: string | null;
+  ownerTeam: string | null;
+  isDeleted: boolean;
+};
+
+/** Mirrors ticketOperationalScope for a persisted row, used to detect portfolio entry transitions. */
+export function isInOperationalSimerSupportPortfolio(ticket: OperationalSupportTicketSnapshot): boolean {
+  if (ticket.isDeleted || ticket.createdDate < OPERATIONAL_SCOPE_START || !isSupportAnalyst(ticket.owner)) return false;
+  const normalizedClient = normalizeClientScopeValue(ticket.client ?? "");
+  if (!SIMER_CLIENTS.some((client) => normalizeClientScopeValue(client) === normalizedClient)) return false;
+  const products = [ticket.service, ticket.serviceFirstLevel, ticket.serviceSecondLevel, ticket.serviceThirdLevel, ticket.ownerTeam]
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeClientScopeValue);
+  if (SIMER_EXCLUDED_PRODUCTS.some((product) => products.some((value) => value.includes(normalizeClientScopeValue(product))))) return false;
+  return products.some((value) => value.includes("SIMER"));
 }
 
 /** A Coordenação usa a mesma carteira estrita das demais telas. */

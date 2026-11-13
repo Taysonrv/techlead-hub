@@ -69,10 +69,13 @@ declare global {
 
         importEnv: () => Promise<{
           databaseUrl: string;
+          systemConfigKey?: string;
           organization: string;
           project: string;
           wiki: string;
           pat: string;
+          movideskToken?: string;
+          movideskUrl?: string;
           smtpHost?: string;
           smtpPort?: string;
           smtpSecure?: string;
@@ -105,12 +108,17 @@ declare global {
           success: boolean;
           restartRequired: boolean;
         }>;
-        recoverKey: (candidate: string) => Promise<{ saved: boolean }>;
+        recoverKey: (candidate: string, legacyRekey?: boolean) => Promise<{ saved: boolean }>;
+        diagnoseDatabase: (databaseUrl: string) => Promise<{ ok: boolean; message: string }>;
       };
 
       startup: {
         get: () => Promise<{ enabled: boolean }>;
         set: (enabled: boolean) => Promise<{ enabled: boolean }>;
+      };
+
+      notifications: {
+        show: (notification: { key: string; title: string; body: string; silent: boolean }) => Promise<boolean>;
       };
 
       updates: {

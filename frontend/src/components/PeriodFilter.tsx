@@ -12,7 +12,7 @@ import { useFilters, type PeriodOption } from "../context/FiltersContext";
 const fieldSx = {
   "& .MuiOutlinedInput-root": {
     minHeight: 40,
-    borderRadius: "8px",
+    borderRadius: "11px",
     bgcolor: "background.paper",
   },
 } as const;
@@ -36,7 +36,7 @@ export function PeriodFilter() {
   return (
     <Stack
       direction={{ xs: "column", sm: "row" }}
-      spacing={0.8}
+      spacing={1.2}
       useFlexGap
       sx={{
         alignItems: { xs: "stretch", sm: "flex-end" },
@@ -47,7 +47,8 @@ export function PeriodFilter() {
     >
       <Box
         sx={{
-          minWidth: { xs: "100%", sm: 168 },
+          minWidth: { xs: 0, sm: 168 },
+          maxWidth: "100%",
           flex: { xs: "1 1 100%", sm: "0 1 184px" },
         }}
       >
@@ -108,12 +109,13 @@ export function PeriodFilter() {
               xs: "1fr",
               sm: "repeat(2,minmax(145px,1fr))",
             },
-            gap: 0.8,
+            gap: 1.2,
             flex: "1 1 310px",
+            maxWidth: "100%",
             minWidth: 0,
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Typography
               component="label"
               htmlFor={startDateId}

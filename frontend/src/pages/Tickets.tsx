@@ -1,3 +1,4 @@
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import { KpiGrid } from "../components/KpiGrid";
 import { useId } from "react";
 import {
@@ -50,11 +51,13 @@ import {
 } from "react";
 
 import { api } from "../services/api";
+import { isOperationallyOpen } from "../utils/operationalMetrics";
 import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
 import { useFilters } from "../context/FiltersContext";
 import { PeriodFilter } from "../components/PeriodFilter";
 import { PageHeader } from "../components/PageHeader";
 import { ContentState } from "../components/ContentState";
+import { AsyncState } from "../components/AsyncState";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -1144,17 +1147,16 @@ export function Tickets() {
      LOADING / ERROR
   ======================================================= */
 
-  if (loading) {
-    return <ContentState kind="loading" title="Carregando tickets" minHeight={360} />;
-  }
-
-  if (
-    error && tickets.length === 0
-  ) {
+  if (loading || (error && tickets.length === 0)) {
     return (
-      <Alert severity="error">
-        {error}
-      </Alert>
+      <AsyncState
+        status={loading ? "loading" : "error"}
+        data={tickets}
+        error={error}
+        loading={<ContentState kind="loading" title="Carregando tickets" minHeight={360} />}
+      >
+        {() => null}
+      </AsyncState>
     );
   }
 
@@ -2440,22 +2442,15 @@ export function Tickets() {
           )
         }
         ModalProps={{ disableEnforceFocus: true }}
-        slotProps={{
-          paper: {
-            sx: {
-              backgroundColor: "background.paper",
-              color: "text.primary",
-            },
-          },
-        }}
+        slotProps={{ paper: { sx: detailDrawerPaperSx } }}
       >
         <Box
           sx={{
             width: {
               xs:
-                330,
+                "100%",
               sm:
-                540,
+                "100%",
             },
 
             p:
@@ -2547,6 +2542,7 @@ export function Tickets() {
                 <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 900 }}>Ações rápidas</Typography>
                 <Box sx={{ mt: .45, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: .8 }}>
                   <Button size="small" variant="contained" startIcon={<ShareOutlined />} onClick={() => window.dispatchEvent(new CustomEvent("techlead-hub:share-chat", { detail: { label: "Ticket", recordId: selectedTicket.movideskId, title: selectedTicket.subject, client: selectedTicket.client, status: selectedTicket.status, path: `/operacao/tickets?movidesk=${selectedTicket.movideskId}` } }))}>Compartilhar</Button>
+                  <Button size="small" variant="outlined" startIcon={<ShareOutlined />} onClick={() => navigate(`/chat?contextTicket=${encodeURIComponent(String(selectedTicket.movideskId))}&contextTitle=${encodeURIComponent(selectedTicket.subject)}&contextClient=${encodeURIComponent(selectedTicket.client ?? "")}`)}>Abrir sala</Button>
                   <Button size="small" variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openMovideskTicket(selectedTicket)}>Abrir origem</Button>
                   <Button size="small" variant="outlined" startIcon={<SearchOutlined />} onClick={() => navigate(`/investigacao?q=${selectedTicket.movideskId}`)}>Investigar</Button>
                 </Box>
@@ -4588,14 +4584,7 @@ function isOpen(
   ticket:
     Ticket
 ) {
-  return ![
-    "Resolved",
-    "Closed",
-    "Canceled",
-  ].includes(
-    ticket.baseStatus ??
-      ""
-  );
+  return isOperationallyOpen(ticket);
 }
 
 function uniqueValues(

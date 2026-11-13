@@ -1,6 +1,9 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { LeadershipOkrPanel } from "../components/LeadershipOkrPanel";
+import { LeadershipResolutionPanel } from "../components/LeadershipResolutionPanel";
+import { ContentState } from "../components/ContentState";
 import {
-  Alert, Box, Button, Card, CardContent, Chip, CircularProgress, Drawer,
+  Alert, Box, Button, Card, CardContent, Chip, Drawer,
   FormControl, IconButton, InputLabel, MenuItem, Select, Stack, Tab, Tabs, Tooltip, Typography,
 } from "@mui/material";
 import {
@@ -13,6 +16,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 import { KpiCard } from "../components/KpiCard";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import type { TicketExportRow } from "../components/ExportTicketsButton";
@@ -39,6 +43,7 @@ type Gap = { id: string; type: string; title: string; evidence: string; impact: 
 type Development = { analyst: string; tickets: number; stale: number; linkedTasks?: number; blockedTasks?: number; finishedTasks?: number; themes: Array<{ topic: string; count: number }>; examples?: Ticket[] };
 type Data = {
   generatedAt: string; periodDays: number; periodStart?: string; periodEnd?: string;
+  coverage?: { ticketsLoaded: number; tasksLoaded: number; ticketLimitReached: boolean; taskLimitReached: boolean };
   radar: Record<string, number>;
   radarSamples: Record<string, Array<Ticket | Task>>;
   audit: { candidates: number; sample: Array<Ticket & { reason: string; reasons: string[]; evidenceCount: number; sources: string[]; auditScore: number; confidence: "ALTA" | "MÉDIA" }> };
@@ -65,7 +70,7 @@ type Data = {
   filters: { clients: string[]; users: string[] };
 };
 
-type TabKey = "indicators" | "radar" | "audit" | "recurrences" | "gaps" | "development";
+type TabKey = "indicators" | "radar" | "audit" | "recurrences" | "gaps" | "development" | "okrs";
 type PeriodPreset = "7" | "30" | "60" | "90" | "month" | "lastMonth" | "semester" | "year" | "custom";
 
 function dateInputValue(date: Date) {
@@ -89,7 +94,7 @@ function resolvePeriod(preset: PeriodPreset, customStart: string, customEnd: str
   return { days: Math.max(1, Math.ceil((now.getTime() - start.getTime()) / 86400000)), startDate: dateInputValue(start), endDate: dateInputValue(now) };
 }
 type DrawerState =
-  | { kind: "radar"; key: string; title: string; items: Array<Ticket | Task> }
+  | { kind: "radar"; key: string; title: string; items: Array<Ticket | Task>; total?: number }
   | { kind: "audit"; title: string; items: Array<Ticket & { reason: string }> }
   | { kind: "recurrence"; title: string; recurrence: Recurrence }
   | { kind: "gap"; title: string; gap: Gap }
@@ -116,6 +121,7 @@ const tabInfo: Record<TabKey, string> = {
   recurrences: "Agrupa temas repetidos e compara o período atual com o anterior para sugerir investigação, treinamento ou causa raiz.",
   gaps: "Transforma sinais recorrentes da operação em pontos de atenção técnicos, explicando evidência, impacto e próxima ação sugerida. Não altera prioridade formal do atendimento ou do Azure.",
   development: "Mostra concentração de temas e pontos de apoio por analista para orientar desenvolvimento técnico, sem ranking.",
+  okrs: "Acompanhamento compartilhado dos quatro entregáveis de qualidade, com evidências, responsáveis, prazos e histórico no PostgreSQL.",
 };
 
 function AreaTitle({ title, info, icon }: { title: string; info: string; icon?: ReactNode }) {
@@ -147,6 +153,7 @@ function IndicatorPeriodFilter({ value, onChange }: { value: PeriodPreset; onCha
 
 function Delta({ value }: { value: number | null }) {
   if (value === null) return <Chip size="small" label="Sem base anterior" variant="outlined" />;
+  if (value === 0) return <Chip size="small" label="Sem variação vs. período anterior" variant="outlined" />;
   const Icon = value > 0 ? TrendingUpOutlined : TrendingDownOutlined;
   return <Chip size="small" icon={<Icon />} color={value > 0 ? "warning" : "success"} label={`${value > 0 ? "+" : ""}${value}% vs. período anterior`} />;
 }
@@ -161,15 +168,21 @@ export function TechnicalLeadership() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  useVisiblePolling(() => setRefreshVersion((value) => value + 1), 120_000);
+  const [indicatorErrors, setIndicatorErrors] = useState<string[]>([]);
   const [tab, setTab] = useState<TabKey>("indicators");
   const [client, setClient] = useState("");
   const [user, setUser] = useState("");
-  const [period, setPeriod] = useState<PeriodPreset>("30");
+  const [period, setPeriod] = useState<PeriodPreset>("month");
   const [indicatorPeriods, setIndicatorPeriods] = useState<Record<string, PeriodPreset>>({});
   const [indicatorData, setIndicatorData] = useState<Record<string, Data["analytics"]>>({});
   const indicatorPeriod = (key: string) => indicatorPeriods[key] ?? period;
-  const setIndicatorPeriod = (key: string, value: PeriodPreset) => setIndicatorPeriods((current) => ({ ...current, [key]: value }));
-  const analyticsFor = (key: string) => indicatorData[key] ?? data?.analytics;
+  const setIndicatorPeriod = (key: string, value: PeriodPreset) => {
+    setIndicatorData((current) => { const next = { ...current }; delete next[key]; return next; });
+    setIndicatorPeriods((current) => ({ ...current, [key]: value }));
+  };
+  const analyticsFor = (key: string) => indicatorPeriods[key] ? indicatorData[key] : data?.analytics;
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [drawer, setDrawer] = useState<DrawerState>(null);
@@ -212,34 +225,43 @@ export function TechnicalLeadership() {
 
   useEffect(() => {
     const entries = Object.entries(indicatorPeriods);
+    setIndicatorErrors([]);
     if (!entries.length) return;
     let active = true;
     const requests = entries.map(async ([key, preset]) => {
-      if (preset === "custom" && (!customStart || !customEnd)) return;
+      if (preset === "custom" && (!customStart || !customEnd || customStart > customEnd)) return;
       const range = resolvePeriod(preset, customStart, customEnd);
-      const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
-      if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
+      try {
+        const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
+        if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
+      } catch {
+        if (active) setIndicatorErrors((current) => [...current, key]);
+      }
     });
     void Promise.allSettled(requests);
     return () => { active = false; };
-  }, [indicatorPeriods, client, user, customStart, customEnd]);
+  }, [indicatorPeriods, client, user, customStart, customEnd, refreshVersion]);
 
   useEffect(() => {
     setIndicatorData({});
-  }, [period]);
+    setIndicatorPeriods({});
+    setIndicatorErrors([]);
+  }, [period, client, user]);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setData(null);
+    setDrawer(null);
     setError("");
     const range = resolvePeriod(period, customStart, customEnd);
-    if (period === "custom" && (!customStart || !customEnd)) { setLoading(false); return () => { active = false; }; }
+    if (period === "custom" && (!customStart || !customEnd || customStart > customEnd)) { setData(null); setLoading(false); return () => { active = false; }; }
     api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } })
       .then((response) => active && setData(response.data))
-      .catch(() => active && setError("Não foi possível carregar a Central de Liderança Técnica."))
+      .catch(() => { if (active) { setData(null); setError("Não foi possível carregar a Central de Liderança Técnica."); } })
       .finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [client, user, period, customStart, customEnd]);
+  }, [client, user, period, customStart, customEnd, refreshVersion]);
 
   const attention = useMemo(() => data ? [
     data.radar.slaOverdue, data.radar.newTooLong, data.radar.pausedTooLong, data.radar.blocked,
@@ -272,7 +294,8 @@ export function TechnicalLeadership() {
     } else navigate(`/tickets?movidesk=${item.movideskId}`);
   };
 
-  if (loading && !data) return <Box sx={{ minHeight: 420, display: "grid", placeItems: "center" }}><CircularProgress /></Box>;
+  if (!data && loading) return <ContentState kind="loading" title="Carregando liderança técnica" minHeight={420} />;
+  if (!data && error) return <Stack spacing={2}><Alert severity="error">{error}</Alert><Button variant="contained" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button></Stack>;
 
   return <Box sx={{
     minWidth: 0,
@@ -283,10 +306,14 @@ export function TechnicalLeadership() {
       title="Central de Liderança Técnica"
       description="Radar executivo para transformar sinais da operação em investigação, orientação e ação acompanhada."
       meta={data ? `Atualizado em ${new Date(data.generatedAt).toLocaleString("pt-BR")} · ${data.periodStart && data.periodEnd ? `${new Date(data.periodStart).toLocaleDateString("pt-BR")} a ${new Date(data.periodEnd).toLocaleDateString("pt-BR")}` : `janela de ${data.periodDays} dias`}` : undefined}
-      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} sinais de atenção`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
+      action={<Stack direction="row" spacing={1}><Chip icon={<RadarOutlined />} label={`${attention} ocorrências de sinais`} color={attention ? "warning" : "success"} sx={{ fontWeight: 850, boxShadow: attention ? "0 0 22px rgba(255,167,38,.18)" : "0 0 22px rgba(0,199,142,.18)" }} /></Stack>}
     />
 
-    {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    {period === "custom" && (!customStart || !customEnd || customStart > customEnd) && <Alert severity="info" sx={{ mb: 2 }}>Informe um intervalo personalizado válido: data inicial e final obrigatórias, com início anterior ou igual ao fim.</Alert>}
+    {error && <Alert severity="error" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Recarregar</Button>}>{error}</Alert>}
+    {data?.coverage && (data.coverage.ticketLimitReached || data.coverage.taskLimitReached) && <Alert severity="warning" sx={{ mb: 2 }}>A análise atingiu o limite de 5.000 registros. Os indicadores podem não representar toda a carteira; considere reduzir o recorte.</Alert>}
+    {Object.keys(indicatorPeriods).some((key) => !indicatorData[key] && !indicatorErrors.includes(key)) && <Alert severity="info" sx={{ mb: 2 }}>Atualizando gráficos com períodos individuais. Até a conclusão, os gráficos correspondentes permanecem sem dados para evitar exibir valores de outro período.</Alert>}
+    {indicatorErrors.length > 0 && <Alert severity="warning" sx={{ mb: 2 }} action={<Button size="small" color="inherit" onClick={() => setRefreshVersion((value) => value + 1)}>Tentar novamente</Button>}>Não foi possível atualizar {indicatorErrors.length} gráfico(s) com período individual. Os dados gerais permanecem disponíveis.</Alert>}
 
     <Card sx={{
       mb: 2.5,
@@ -324,10 +351,10 @@ export function TechnicalLeadership() {
         </Stack>}
 
         {data && <KpiGrid sx={{mt: 2}}>
-          <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [] })} />
-          <KpiCard title="Backlog atual" value={data.weekly.open} subtitle="Clique para investigar" info="Snapshot dos atendimentos ainda abertos na carteira filtrada; não representa apenas entradas do período." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [] })} />
-          <KpiCard title="Prazos vencidos" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos cujo prazo operacional (dueDate) já foi ultrapassado. Mesmo conceito usado na Coordenação." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "overdue", title: "Prazos vencidos", items: data.radarSamples.overdue ?? [] })} />
-          <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [] })} />
+          <KpiCard title="Atendimentos no período" value={data.weekly.current} subtitle="Clique para ver os atendimentos" info="Tickets criados no período selecionado." accent={aliareColors.info} onClick={() => setDrawer({ kind: "radar", key: "opened", title: "Atendimentos no período", items: (data.analytics.samples.opened as Ticket[]) ?? [], total: data.weekly.current })} />
+          <KpiCard title="Backlog atual" value={data.weekly.open} subtitle="Clique para investigar" info="Snapshot dos atendimentos ainda abertos na carteira filtrada; não representa apenas entradas do período." accent={aliareColors.cyan} onClick={() => setDrawer({ kind: "radar", key: "backlog", title: "Backlog aberto", items: data.analytics.samples.backlog ?? [], total: data.weekly.open })} />
+          <KpiCard title="Prazos vencidos" value={data.weekly.overdue} subtitle="Clique para investigar" info="Atendimentos abertos cujo prazo operacional (dueDate) já foi ultrapassado. Mesmo conceito usado na Coordenação." accent={aliareColors.error} onClick={() => setDrawer({ kind: "radar", key: "overdue", title: "Prazos vencidos", items: data.radarSamples.overdue ?? [], total: data.weekly.overdue })} />
+          <KpiCard title="Tasks bloqueadas" value={data.weekly.blocked} subtitle="Clique para investigar" info="Work Items ativos com bloqueio de processo." accent={aliareColors.purple} onClick={() => setDrawer({ kind: "radar", key: "blocked", title: "Tasks bloqueadas", items: data.radarSamples.blocked ?? [], total: data.weekly.blocked })} />
         </KpiGrid>}
       </CardContent>
     </Card>
@@ -338,7 +365,7 @@ export function TechnicalLeadership() {
         <Delta value={data.weekly.changePct} />
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(5,1fr)" }, gap: 1.2, mt: 1.5 }}>
-        {[["Atual", data.weekly.current, "radar"], ["Anterior", data.weekly.previous, "recurrences"], ["Pausados", data.weekly.paused, "radar"], ["Sem movimento", data.weekly.stale, "audit"], ["Bloqueados", data.weekly.blocked, "radar"]].map(([label, value, target]) => <Box key={String(label)} role="button" tabIndex={0} onClick={() => setTab(target as TabKey)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setTab(target as TabKey); }} sx={{ cursor: "pointer", p: 1.25, borderRadius: 2, background: mode === "dark" ? "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))" : "rgba(15,23,42,.025)", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
+        {[["Atual", data.weekly.current], ["Anterior", data.weekly.previous], ["Pausados", data.weekly.paused], ["Sem movimento", data.weekly.stale], ["Bloqueados", data.weekly.blocked]].map(([label, value]) => <Box key={String(label)} sx={{ p: 1.25, borderRadius: 2, background: mode === "dark" ? "linear-gradient(145deg, rgba(18,47,69,.90), rgba(12,31,51,.92))" : "rgba(15,23,42,.025)", border: "1px solid", borderColor: "divider" }}><Typography variant="caption" color="text.secondary">{label}</Typography><Typography sx={{ fontWeight: 850, fontSize: "1.25rem" }}>{value}</Typography></Box>)}
       </Box>
       {data.recommendations.length > 0 && <Box sx={{ mt: 1.5, p: 1.4, borderRadius: 2, background: mode === "dark" ? "linear-gradient(135deg, rgba(0,199,142,.12), rgba(20,64,75,.35))" : aliareColors.surfaceGreen, border: "1px solid rgba(0,199,142,.28)" }}>
         <AreaTitle title="Ações recomendadas" info="Sugestões geradas a partir dos sinais objetivos da operação. Não executam ações automaticamente e devem passar por julgamento técnico." />
@@ -382,14 +409,19 @@ export function TechnicalLeadership() {
         ["recurrences", "Recorrências", <TrackChangesOutlined key="recurrences" fontSize="small" />],
         ["gaps", "Gaps técnicos", <ErrorOutlineOutlined key="gaps" fontSize="small" />],
         ["development", "Desenvolvimento", <GroupsOutlined key="development" fontSize="small" />],
+        ["okrs", "OKRs e melhoria", <AssignmentTurnedInOutlined key="okrs" fontSize="small" />],
       ] as Array<[TabKey, string, ReactElement]>).map(([key, label, icon]) => <Tab key={key} value={key} icon={icon} iconPosition="start" label={<Stack direction="row" spacing={.5} sx={{ alignItems: "center" }}><span>{label}</span><Tooltip title={tabInfo[key]}><InfoOutlined onClick={(e) => e.stopPropagation()} sx={{ fontSize: 15, color: "text.secondary" }} /></Tooltip></Stack>} />)}
     </Tabs></Card>
+
+    {tab === "okrs" && <LeadershipOkrPanel />}
 
     {data && tab === "indicators" && <Box>
       <Stack direction={{ xs: "column", md: "row" }} sx={{ justifyContent: "space-between", alignItems: { md: "center" }, gap: 1, mb: 1.5 }}>
         <AreaTitle title="Cockpit operacional" info={tabInfo.indicators} icon={<InsightsOutlined color="primary" />} />
         <Chip size="small" variant="outlined" label="Movidesk + inteligência operacional" />
       </Stack>
+
+      <LeadershipResolutionPanel operational={data.analytics.operational} daily={data.analytics.daily} periodLabel={data.periodStart && data.periodEnd ? `${new Date(data.periodStart).toLocaleDateString("pt-BR")} a ${new Date(data.periodEnd).toLocaleDateString("pt-BR")}` : `últimos ${data.periodDays} dias`} coverage={data.coverage} onOpenOkrs={() => setTab("okrs")} onInvestigateRecurrences={() => setTab("recurrences")} />
 
       <KpiGrid sx={{mb: 2}}>
         <KpiCard title="SLA solução" value={data.analytics.operational.resolutionSlaRate === null ? "—" : `${data.analytics.operational.resolutionSlaRate}%`} subtitle="Resolvidos no prazo" accent={aliareColors.green} onClick={() => setDrawer({ kind: "radar", key: "resolutionOutside", title: "Solução fora do SLA", items: data.analytics.samples.resolutionOutside ?? [] })} />
@@ -412,10 +444,10 @@ export function TechnicalLeadership() {
             <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
             <ChartTooltip contentStyle={{ borderRadius: 12, background: mode === "dark" ? "#0E2338" : "#fff" }} />
 
-            {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="monotone" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
-            {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="monotone" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
-            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="monotone" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2.4} dot={false} />}
-            {isLeadershipSeriesVisible("dailyFlow", "pending") && <Line type="monotone" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "opened") && <Line type="linear" dataKey="opened" name="Abertos" stroke={aliareColors.info} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "resolved") && <Line type="linear" dataKey="resolved" name="Resolvidos" stroke={aliareColors.green} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "reopened") && <Line type="linear" dataKey="reopened" name="Reabertos" stroke={aliareColors.warning} strokeWidth={2.4} dot={false} />}
+            {isLeadershipSeriesVisible("dailyFlow", "pending") && <Line type="linear" dataKey="pending" name="Pendentes" stroke={aliareColors.purple} strokeWidth={2.4} dot={false} />}
           </LineChart></ResponsiveContainer></Box>
           <SeriesSelector chart="dailyFlow" items={[
             { key: "opened", label: "Abertos", color: aliareColors.info },
@@ -484,7 +516,7 @@ export function TechnicalLeadership() {
         <Chip size="small" variant="outlined" label="Snapshot atual · cliente/analista" />
       </Stack>
       <KpiGrid sx={{mt: 1.2}}>
-        {radarMeta.map(([key, title, info, accent]) => <KpiCard key={key} title={title} value={data.radar[key] ?? 0} subtitle="Clique para investigar" info={info} accent={accent} onClick={() => setDrawer({ kind: "radar", key, title, items: data.radarSamples[key] ?? [] })} />)}
+        {radarMeta.map(([key, title, info, accent]) => <KpiCard key={key} title={title} value={data.radar[key] ?? 0} subtitle="Clique para investigar" info={info} accent={accent} onClick={() => setDrawer({ kind: "radar", key, title, items: data.radarSamples[key] ?? [], total: data.radar[key] ?? 0 })} />)}
       </KpiGrid>
     </Box>}
 
@@ -596,15 +628,16 @@ export function TechnicalLeadership() {
         <ExportTicketsButton tickets={drawerExportRows} title={drawer.title} subtitle="Central de Liderança Técnica" />
       </Box>}
       {drawer?.kind === "radar" && <DetailSection title="Itens para investigação">
+        {drawer.total !== undefined && drawer.total > drawer.items.length && <Alert severity="info" sx={{ mb: 1.2 }}>Exibindo {drawer.items.length} de {drawer.total} itens. O indicador considera o total; a lista é limitada para manter a consulta rápida.</Alert>}
         <Stack spacing={1}>{drawer.items.map((item) => <Button key={isTask(item) ? `task-${item.id}` : `ticket-${item.id}`} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(item)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>
           <Box sx={{ minWidth: 0 }}><Typography sx={{ fontWeight: 800 }}>{isTask(item) ? `#${item.id} · ${item.title}` : `#${item.movideskId} · ${item.subject}`}</Typography><Typography variant="caption" color="text.secondary">{[isTask(item) ? item.state : item.status, item.client, isTask(item) ? item.assignedToName : item.owner].filter(Boolean).join(" · ")}</Typography></Box>
         </Button>)}</Stack>
         {!drawer.items.length && <Alert severity="success">Nenhum item neste recorte.</Alert>}
       </DetailSection>}
       {drawer?.kind === "audit" && <DetailSection title="Revisão humana recomendada"><Stack spacing={1}>{drawer.items.map((ticket) => <Card key={ticket.id} variant="outlined"><CardContent><Typography sx={{ fontWeight: 850 }}>#{ticket.movideskId} · {ticket.subject}</Typography><Typography variant="body2" color="text.secondary" sx={{ mt: .5 }}>{ticket.reason}</Typography><DetailFieldGrid fields={[["Categoria", ticket.category ?? "Não informado"], ["Causa", ticket.cause ?? "Não se aplica / não informado"], ["Motivo", ticket.classificationReason ?? "Não se aplica / não informado"], ["Responsável", ticket.owner ?? "Não informado"], ["Cliente", ticket.client ?? "Não informado"]]} /><Button sx={{ mt: 1 }} endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)}>Abrir atendimento</Button></CardContent></Card>)}</Stack></DetailSection>}
-      {drawer?.kind === "recurrence" && <><DetailSection title="Leitura do padrão"><Alert severity={drawer.recurrence.trend === "GROWING" || drawer.recurrence.trend === "EMERGING" ? "warning" : drawer.recurrence.trend === "DECLINING" ? "success" : "info"} sx={{ mb: 1.5 }}>{drawer.recurrence.reading === "EMERGING_TRANSVERSAL" ? "Tema emergente e transversal entre clientes." : drawer.recurrence.reading === "GROWING_TRANSVERSAL" ? "Recorrência em crescimento entre clientes." : drawer.recurrence.reading === "CLIENT_CONCENTRATED" ? "Recorrência concentrada no cliente predominante." : drawer.recurrence.reading === "DECLINING" ? "Recorrência em redução no período." : "Padrão recorrente sem mudança temporal relevante."}</Alert><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Variação", drawer.recurrence.changePct === null ? "Novo no período" : `${drawer.recurrence.changePct > 0 ? "+" : ""}${drawer.recurrence.changePct}%`], ["Tendência", drawer.recurrence.trend === "EMERGING" ? "Tema emergente" : drawer.recurrence.trend === "GROWING" ? "Em crescimento" : drawer.recurrence.trend === "DECLINING" ? "Em redução" : "Estável"], ["Padrão", drawer.recurrence.concentration?.pattern === "TRANSVERSAL" ? "Transversal entre clientes" : drawer.recurrence.concentration?.pattern === "CONCENTRATED" ? "Concentrado em cliente" : "Distribuído"], ["Confiança", drawer.recurrence.confidence ?? "—"], ["Evidências Azure", drawer.recurrence.linkedExamples ?? 0], ["Cliente predominante", drawer.recurrence.concentration?.topClient ?? "—"], ["Concentração no cliente", drawer.recurrence.concentration?.topClient ? `${drawer.recurrence.concentration.clientSharePct}%` : "—"], ["Módulo Azure predominante", drawer.recurrence.concentration?.topModule ?? "—"]]} /></DetailSection><DetailSection title="Abrangência"><DetailFieldGrid fields={[["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert><Button variant="contained" startIcon={<SearchOutlined />} sx={{ mt: 1.2 }} onClick={() => { const p = new URLSearchParams({ q: drawer.recurrence.topic, source: "leadership", origin: "recurrence" }); if (drawer.recurrence.concentration?.topClient) p.set("client", drawer.recurrence.concentration.topClient); if (drawer.recurrence.trend) p.set("trend", drawer.recurrence.trend); if (drawer.recurrence.concentration?.pattern) p.set("pattern", drawer.recurrence.concentration.pattern); if (drawer.recurrence.confidence) p.set("confidence", drawer.recurrence.confidence); navigate(`/investigacao?${p.toString()}`); }}>Investigar este padrão</Button></DetailSection><DetailSection title="Evidências"><Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
-      {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity={drawer.gap.confidence === "Alta" ? "success" : "info"} sx={{ mb: 1.5 }}>O nível de confiança representa a quantidade de evidências independentes encontradas. A decisão final continua dependendo de validação da liderança.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Impacto", drawer.gap.impact], ["Status da análise", drawer.gap.status], ["Confiança", drawer.gap.confidence ?? "—"], ["Tickets relacionados", drawer.gap.ticketCount ?? 0], ["Vínculos Azure", drawer.gap.azureLinked ?? 0], ["Tasks bloqueadas", drawer.gap.blockedLinked ?? 0]]} /></DetailSection><DetailSection title="Evidências cruzadas"><Typography variant="body2">{drawer.gap.evidence}</Typography>{Boolean(drawer.gap.examples?.length) && <Stack spacing={.8} sx={{ mt: 1.2 }}>{drawer.gap.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack>}</DetailSection>{Boolean(drawer.gap.tasks?.length) && <DetailSection title="Tasks Azure relacionadas"><Stack spacing={.8}>{drawer.gap.tasks!.map((task) => <Button key={task.id} variant="outlined" onClick={() => openItem(task)} sx={{ justifyContent: "space-between", textTransform: "none" }}>Task #{task.id} · {task.title}<Chip size="small" label={task.state} /></Button>)}</Stack></DetailSection>}<DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
-      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem ação 72h", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection>{Boolean(drawer.development.examples?.length) && <DetailSection title="Atendimentos do período"><Stack spacing={.8}>{drawer.development.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection>}</>}
+      {drawer?.kind === "recurrence" && <><DetailSection title="Leitura do padrão"><Alert severity={drawer.recurrence.trend === "GROWING" || drawer.recurrence.trend === "EMERGING" ? "warning" : drawer.recurrence.trend === "DECLINING" ? "success" : "info"} sx={{ mb: 1.5 }}>{drawer.recurrence.reading === "EMERGING_TRANSVERSAL" ? "Tema emergente e transversal entre clientes." : drawer.recurrence.reading === "GROWING_TRANSVERSAL" ? "Recorrência em crescimento entre clientes." : drawer.recurrence.reading === "CLIENT_CONCENTRATED" ? "Recorrência concentrada no cliente predominante." : drawer.recurrence.reading === "DECLINING" ? "Recorrência em redução no período." : "Padrão recorrente sem mudança temporal relevante."}</Alert><DetailFieldGrid fields={[["Ocorrências", drawer.recurrence.count], ["Período anterior", drawer.recurrence.previous], ["Variação", drawer.recurrence.changePct === null ? "Novo no período" : `${drawer.recurrence.changePct > 0 ? "+" : ""}${drawer.recurrence.changePct}%`], ["Tendência", drawer.recurrence.trend === "EMERGING" ? "Tema emergente" : drawer.recurrence.trend === "GROWING" ? "Em crescimento" : drawer.recurrence.trend === "DECLINING" ? "Em redução" : "Estável"], ["Padrão", drawer.recurrence.concentration?.pattern === "TRANSVERSAL" ? "Transversal entre clientes" : drawer.recurrence.concentration?.pattern === "CONCENTRATED" ? "Concentrado em cliente" : "Distribuído"], ["Confiança", drawer.recurrence.confidence ?? "—"], ["Evidências Azure", drawer.recurrence.linkedExamples ?? 0], ["Cliente predominante", drawer.recurrence.concentration?.topClient ?? "—"], ["Concentração no cliente", drawer.recurrence.concentration?.topClient ? `${drawer.recurrence.concentration.clientSharePct}%` : "—"], ["Módulo Azure predominante", drawer.recurrence.concentration?.topModule ?? "—"]]} /></DetailSection><DetailSection title="Abrangência"><DetailFieldGrid fields={[["Clientes", drawer.recurrence.clients.join(", ") || "—"], ["Analistas", drawer.recurrence.analysts.join(", ") || "—"]]} /></DetailSection><DetailSection title="Ação sugerida"><Alert severity="info">{drawer.recurrence.action}</Alert><Button variant="contained" startIcon={<SearchOutlined />} sx={{ mt: 1.2 }} onClick={() => { const p = new URLSearchParams({ q: drawer.recurrence.topic, source: "leadership", origin: "recurrence" }); if (drawer.recurrence.concentration?.topClient) p.set("client", drawer.recurrence.concentration.topClient); if (drawer.recurrence.trend) p.set("trend", drawer.recurrence.trend); if (drawer.recurrence.concentration?.pattern) p.set("pattern", drawer.recurrence.concentration.pattern); if (drawer.recurrence.confidence) p.set("confidence", drawer.recurrence.confidence); navigate(`/investigacao?${p.toString()}`); }}>Investigar este padrão</Button></DetailSection><DetailSection title="Evidências">{drawer.recurrence.count > drawer.recurrence.examples.length && <Alert severity="info" sx={{ mb: 1.2 }}>Exibindo {drawer.recurrence.examples.length} de {drawer.recurrence.count} ocorrências. O resumo e as métricas consideram o conjunto completo.</Alert>}<Stack spacing={1}>{drawer.recurrence.examples.map((ticket) => <Button key={ticket.id} variant="outlined" onClick={() => openItem(ticket)} endIcon={<OpenInNewOutlined />} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection></>}
+      {drawer?.kind === "gap" && <><DetailSection title="Diagnóstico do ponto de atenção"><Alert severity={drawer.gap.confidence === "Alta" ? "success" : "info"} sx={{ mb: 1.5 }}>O nível de confiança representa a quantidade de evidências independentes encontradas. A decisão final continua dependendo de validação da liderança.</Alert><DetailFieldGrid fields={[["Identificador", drawer.gap.id], ["Origem do sinal", drawer.gap.type], ["Impacto", drawer.gap.impact], ["Status da análise", drawer.gap.status], ["Confiança", drawer.gap.confidence ?? "—"], ["Tickets relacionados", drawer.gap.ticketCount ?? 0], ["Vínculos Azure", drawer.gap.azureLinked ?? 0], ["Tasks bloqueadas", drawer.gap.blockedLinked ?? 0]]} /></DetailSection><DetailSection title="Evidências cruzadas"><Typography variant="body2">{drawer.gap.evidence}</Typography>{Boolean(drawer.gap.examples?.length) && <>{(drawer.gap.ticketCount ?? 0) > (drawer.gap.examples?.length ?? 0) && <Alert severity="info" sx={{ mt: 1.2 }}>Exibindo {drawer.gap.examples?.length ?? 0} de {drawer.gap.ticketCount} tickets relacionados.</Alert>}<Stack spacing={.8} sx={{ mt: 1.2 }}>{drawer.gap.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textAlign: "left", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></>}</DetailSection>{Boolean(drawer.gap.tasks?.length) && <DetailSection title="Tasks Azure relacionadas"><Stack spacing={.8}>{drawer.gap.tasks!.map((task) => <Button key={task.id} variant="outlined" onClick={() => openItem(task)} sx={{ justifyContent: "space-between", textTransform: "none" }}>Task #{task.id} · {task.title}<Chip size="small" label={task.state} /></Button>)}</Stack></DetailSection>}<DetailSection title="Próxima ação sugerida"><Alert severity="info">{drawer.gap.action}</Alert></DetailSection></>}
+      {drawer?.kind === "development" && <><DetailSection title="Visão técnica"><DetailFieldGrid fields={[["Analista", drawer.development.analyst], ["Tickets no período", drawer.development.tickets], ["Sem ação 72h", drawer.development.stale], ["Tasks vinculadas", drawer.development.linkedTasks ?? 0], ["Tasks concluídas", drawer.development.finishedTasks ?? 0], ["Tasks bloqueadas", drawer.development.blockedTasks ?? 0]]} /></DetailSection><DetailSection title="Temas mais frequentes"><Stack spacing={.8}>{drawer.development.themes.map((theme) => <Box key={theme.topic} sx={{ p: 1, borderRadius: 1.5, bgcolor: "background.default" }}><Typography variant="body2"><b>{theme.topic}</b> · {theme.count}</Typography></Box>)}</Stack></DetailSection>{Boolean(drawer.development.examples?.length) && <DetailSection title="Atendimentos do período">{drawer.development.tickets > (drawer.development.examples?.length ?? 0) && <Alert severity="info" sx={{ mb: 1.2 }}>Exibindo {drawer.development.examples?.length ?? 0} de {drawer.development.tickets} tickets do período.</Alert>}<Stack spacing={.8}>{drawer.development.examples!.map((ticket) => <Button key={ticket.id} variant="outlined" endIcon={<OpenInNewOutlined />} onClick={() => openItem(ticket)} sx={{ justifyContent: "space-between", textTransform: "none" }}>#{ticket.movideskId} · {ticket.subject}</Button>)}</Stack></DetailSection>}</>}
     </Drawer>
   </Box>;
 }

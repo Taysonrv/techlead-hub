@@ -3,8 +3,10 @@ import {
   BrowserWindow,
   Menu,
   Tray,
+  Notification,
   dialog,
   ipcMain,
+  nativeImage,
   safeStorage,
   screen,
   shell,
@@ -23,6 +25,7 @@ import path from "node:path";
 import http from "node:http";
 import https from "node:https";
 import crypto from "node:crypto";
+import net from "node:net";
 
 import {
   autoUpdater,
@@ -47,12 +50,20 @@ import {
   PROVISIONED_DATABASE_URL,
 } from "./provisioned-config.js";
 
+import {
+  parseEnvironmentValue,
+  selectSystemConfigKey,
+} from "./configuration/environment.js";
+
 /* =========================================================
    CONFIGURAÇÕES
 ========================================================= */
 
 const APP_NAME =
   "TechLead Hub";
+
+const APP_USER_MODEL_ID =
+  "com.aliare.techleadhub";
 
 const BACKEND_HOST =
   "127.0.0.1";
@@ -89,10 +100,14 @@ const READY_URL =
   `${APP_URL}/health/ready`;
 
 const BACKEND_START_TIMEOUT =
-  30_000;
+  60_000;
 
 const DATABASE_READY_TIMEOUT =
-  30_000;
+  60_000;
+
+const STARTUP_LOG_FILENAME = "startup.log";
+const STARTUP_LOG_MAX_BYTES = 2 * 1024 * 1024;
+const STARTUP_LOG_TAIL_LINES = 160;
 
 const HEALTH_CHECK_INTERVAL =
   400;
@@ -187,6 +202,10 @@ let mainWindow:
   | BrowserWindow
   | null = null;
 
+let startupWindow:
+  | BrowserWindow
+  | null = null;
+
 let setupWindow:
   | BrowserWindow
   | null = null;
@@ -199,7 +218,9 @@ let isQuitting =
   false;
 
 let tray: Tray | null = null;
-
+const desktopNotificationTimers = new Map<string, NodeJS.Timeout>();
+let startupStatus = "Preparando o TechLead Hub…";
+const startupLogTail: string[] = [];
 
 let startedBackendHere =
   false;
@@ -801,10 +822,12 @@ function registerIpcHandlers() {
 
   ipcMain.removeHandler("configuration:get");
   ipcMain.removeHandler("configuration:import-env");
+  ipcMain.removeHandler("configuration:diagnose-database");
   ipcMain.removeHandler("configuration:save");
   ipcMain.removeHandler("configuration:recover-key");
   ipcMain.removeHandler("startup:get");
   ipcMain.removeHandler("startup:set");
+  ipcMain.removeHandler("notifications:show");
 
   ipcMain.handle("startup:get", () => ({ enabled: process.platform === "win32" && app.getLoginItemSettings().openAtLogin }));
   ipcMain.handle("startup:set", (_event, enabled: unknown) => {
@@ -812,6 +835,39 @@ function registerIpcHandlers() {
     const openAtLogin = Boolean(enabled);
     app.setLoginItemSettings({ openAtLogin, path: process.execPath });
     return { enabled: app.getLoginItemSettings().openAtLogin };
+  });
+
+  ipcMain.handle("notifications:show", (event, input: unknown) => {
+    if (!mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents || !Notification.isSupported()) return false;
+    if (!input || typeof input !== "object") return false;
+    const payload = input as { key?: unknown; title?: unknown; body?: unknown; silent?: unknown };
+    const key = typeof payload.key === "string" ? payload.key.slice(0, 500) : "";
+    const title = typeof payload.title === "string" ? payload.title.trim().slice(0, 180) : "";
+    const body = typeof payload.body === "string" ? payload.body.trim().slice(0, 800) : "";
+    if (!key || !title || !body || desktopNotificationTimers.has(key)) return false;
+
+    const notification = new Notification({
+      title,
+      body,
+      silent: Boolean(payload.silent),
+      icon: path.join(app.getAppPath(), "assets", "hub-icon.png"),
+    });
+    const closeTimer = setTimeout(() => notification.close(), 8_000);
+    desktopNotificationTimers.set(key, closeTimer);
+    notification.once("close", () => {
+      clearTimeout(closeTimer);
+      desktopNotificationTimers.delete(key);
+    });
+    notification.once("click", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      // Abrir o aviso do Windows não confirma leitura. O item permanece
+      // pendente no sino até o usuário abri-lo no Hub.
+    });
+    notification.show();
+    return true;
   });
 
   ipcMain.handle(
@@ -885,11 +941,45 @@ function registerIpcHandlers() {
     return selectConfigurationFile();
   });
 
+  // Diagnóstico de rede sem transmitir a senha ou abrir conexão ao banco.
+  // A autenticação real é verificada pelo readiness do backend após reiniciar.
+  ipcMain.handle("configuration:diagnose-database", async (_event, candidate: unknown) => {
+    const raw = typeof candidate === "string" && candidate.trim()
+      ? candidate.trim() : (readSecureValue("databaseUrl") || "");
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+      if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname)
+        throw new Error("URL inválida");
+    } catch {
+      return { ok: false, message: "DATABASE_URL inválida ou ausente." };
+    }
+    const host = parsed.hostname;
+    const port = Number(parsed.port || "5432");
+    if (!Number.isInteger(port) || port < 1 || port > 65535)
+      return { ok: false, message: "Porta PostgreSQL inválida." };
+    return await new Promise<{ ok: boolean; message: string }>((resolve) => {
+      const socket = net.createConnection({ host, port });
+      const finish = (ok: boolean, message: string) => {
+        socket.destroy();
+        resolve({ ok, message });
+      };
+      socket.setTimeout(4500);
+      socket.once("connect", () => finish(true, "Servidor PostgreSQL acessível pela rede. A autenticação será validada ao reiniciar."));
+      socket.once("timeout", () => finish(false, "Tempo limite de conexão. Verifique rede, VPN e firewall."));
+      socket.once("error", () => finish(false, "Não foi possível alcançar o PostgreSQL. Verifique endereço, porta e VPN."));
+    });
+  });
+
   ipcMain.handle("configuration:recover-key", async (event, input: unknown) => {
     if (!mainWindow || event.sender !== mainWindow.webContents) {
       throw new Error("A recuperação deve ser iniciada pela janela principal.");
     }
-    const candidate = typeof input === "string" ? input.trim() : "";
+    const recovery = input && typeof input === "object"
+      ? input as { candidate?: unknown; legacyRekey?: unknown }
+      : { candidate: input, legacyRekey: false };
+    const candidate = typeof recovery.candidate === "string" ? recovery.candidate.trim() : "";
+    const legacyRekey = recovery.legacyRekey === true;
     if (candidate.length < 32 || candidate.length > 4096) {
       throw new Error("Chave de recuperação inválida.");
     }
@@ -897,7 +987,9 @@ function registerIpcHandlers() {
       type: "warning",
       title: "Recuperação de credenciais",
       message: "Confirmar recuperação da chave de integração?",
-      detail: "A chave foi validada contra os registros pelo administrador. Ela será armazenada com proteção do Windows e o TechLead Hub será reiniciado. A JWT_SECRET de autenticação não será alterada.",
+      detail: legacyRekey
+        ? "Os registros estão legíveis apenas com a chave legada desta instalação, então o valor informado não pôde ser confirmado pelo banco. Ao continuar, o Hub usará esse valor como SYSTEM_CONFIG_KEY e recriptografará os registros recuperáveis. Confirme que esta é a chave compartilhada correta para todas as instalações. A JWT_SECRET de autenticação não será alterada."
+        : "A chave foi confirmada contra os registros existentes. Ela será armazenada com proteção do Windows e o TechLead Hub será reiniciado. A JWT_SECRET de autenticação não será alterada.",
       buttons: ["Cancelar", "Confirmar recuperação"],
       defaultId: 0,
       cancelId: 0,
@@ -984,6 +1076,57 @@ function getDevelopmentEnvPath() {
   );
 }
 
+function getStartupLogPath() {
+  return path.join(getUserConfigDirectory(), STARTUP_LOG_FILENAME);
+}
+
+function redactStartupLog(value: string) {
+  return value
+    .replace(/("(?:DATABASE_URL|SYSTEM_CONFIG_KEY|JWT_SECRET|AZURE_DEVOPS_PAT|MOVIDESK_TOKEN|SMTP_PASSWORD|token|secret|password|authorization)"\s*:\s*")[^"]*(")/gi, "$1[REDACTED]$2")
+    .replace(/((?:DATABASE_URL|SYSTEM_CONFIG_KEY|JWT_SECRET|AZURE_DEVOPS_PAT|MOVIDESK_TOKEN|SMTP_PASSWORD)\s*[=:]\s*)[^\s,;]+/gi, "$1[REDACTED]")
+    .replace(/(postgres(?:ql)?:\/\/[^:/\s]+:)[^@/\s]+@/gi, "$1[REDACTED]@")
+    .replace(/([?&](?:token|pat|secret|password|key)=)[^&#\s]+/gi, "$1[REDACTED]")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/-]+/gi, "$1[REDACTED]");
+}
+
+function writeStartupLog(source: string, value: unknown) {
+  const content = redactStartupLog(String(value ?? "")).slice(0, 32_000);
+  if (!content.trim()) return;
+  const timestamp = new Date().toISOString();
+  const entries = content.split(/\r?\n/).filter(Boolean).map((line) => `${timestamp} [${source}] ${line}`);
+  startupLogTail.push(...entries);
+  if (startupLogTail.length > STARTUP_LOG_TAIL_LINES) {
+    startupLogTail.splice(0, startupLogTail.length - STARTUP_LOG_TAIL_LINES);
+  }
+
+  try {
+    const logPath = getStartupLogPath();
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    if (fs.existsSync(logPath) && fs.statSync(logPath).size > STARTUP_LOG_MAX_BYTES) {
+      const previousPath = `${logPath}.previous`;
+      try { fs.rmSync(previousPath, { force: true }); } catch { /* manter o log atual */ }
+      fs.renameSync(logPath, previousPath);
+    }
+    fs.appendFileSync(logPath, `${entries.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
+  } catch (error) {
+    console.warn("[desktop] Não foi possível gravar o log de inicialização.", error instanceof Error ? error.name : "erro desconhecido");
+  }
+}
+
+function startupFailureDetails(reason: string) {
+  const tail = startupLogTail.slice(-35).join("\n").slice(-5_000);
+  return `${reason}\n\nLog completo: ${getStartupLogPath()}${tail ? `\n\nÚltimos eventos:\n${tail}` : ""}`;
+}
+
+async function openStartupLog() {
+  try {
+    const result = await shell.openPath(getStartupLogPath());
+    if (result) console.warn("[desktop] Não foi possível abrir o log:", result);
+  } catch (error) {
+    console.warn("[desktop] Não foi possível abrir o log.", error instanceof Error ? error.name : "erro desconhecido");
+  }
+}
+
 /* =========================================================
    CONFIGURAÇÃO SEGURA
 ========================================================= */
@@ -1033,89 +1176,8 @@ type SecureConfigKey =
   | "smtpPassword"
   | "smtpFrom";
 
-function parseEnvValue(
-  content: string,
-  key: string
-) {
-  const lines =
-    content.split(
-      /\r?\n/
-    );
-
-  for (
-    const originalLine of lines
-  ) {
-    const line =
-      originalLine.trim();
-
-    if (
-      !line ||
-      line.startsWith("#")
-    ) {
-      continue;
-    }
-
-    const normalized =
-      line.startsWith("export ")
-        ? line.slice(
-            "export ".length
-          )
-        : line;
-
-    const separatorIndex =
-      normalized.indexOf("=");
-
-    if (
-      separatorIndex < 1
-    ) {
-      continue;
-    }
-
-    const currentKey =
-      normalized
-        .slice(
-          0,
-          separatorIndex
-        )
-        .trim();
-
-    if (
-      currentKey !== key
-    ) {
-      continue;
-    }
-
-    let value =
-      normalized
-        .slice(
-          separatorIndex + 1
-        )
-        .trim();
-
-    if (
-      value.length >= 2 &&
-      (
-        (
-          value.startsWith('"') &&
-          value.endsWith('"')
-        ) ||
-        (
-          value.startsWith("'") &&
-          value.endsWith("'")
-        )
-      )
-    ) {
-      value =
-        value.slice(
-          1,
-          -1
-        );
-    }
-
-    return value.trim();
-  }
-
-  return null;
+function parseEnvValue(content: string, key: string) {
+  return parseEnvironmentValue(content, key);
 }
 
 function readEnvValueFromFile(
@@ -1318,6 +1380,15 @@ function readSecureConfig():
       ) as
         Partial<SecureConfig>;
 
+    if (!parsed || typeof parsed !== "object" || (parsed.version !== undefined && parsed.version !== 1)) {
+      throw new Error("Versão de configuração local não reconhecida.");
+    }
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key !== "version" && value !== undefined && typeof value !== "string") {
+        throw new Error("Formato de configuração local inválido.");
+      }
+    }
+
     return {
       version:
         1,
@@ -1386,15 +1457,8 @@ function readSecureConfig():
           : undefined,
     };
   } catch (error) {
-    console.error(
-      "[desktop] Não foi possível ler a configuração segura:",
-      error
-    );
-
-    return {
-      version:
-        1,
-    };
+    console.error("[desktop] O arquivo de configuração segura está inválido; dados existentes foram preservados.", error instanceof Error ? error.name : "erro desconhecido");
+    throw new Error("O arquivo de configurações locais está inválido. Ele foi preservado para recuperação e não será sobrescrito automaticamente.");
   }
 }
 
@@ -1417,21 +1481,20 @@ function writeSecureConfig(
     }
   );
 
-  fs.writeFileSync(
-    secureConfigPath,
-    `${JSON.stringify(
-      config,
-      null,
-      2
-    )}\n`,
-    {
-      encoding:
-        "utf8",
-
-      mode:
-        0o600,
-    }
-  );
+  const temporaryPath = `${secureConfigPath}.${process.pid}.${crypto.randomBytes(8).toString("hex")}.tmp`;
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    fs.writeFileSync(descriptor, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    fs.fsyncSync(descriptor);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.renameSync(temporaryPath, secureConfigPath);
+  } catch (error) {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    try { fs.rmSync(temporaryPath, { force: true }); } catch { /* preserva o arquivo anterior */ }
+    throw error;
+  }
 }
 
 function encryptSecret(
@@ -1483,12 +1546,8 @@ function readSecureValue(
       encryptedValue
     );
   } catch (error) {
-    console.error(
-      `[desktop] Não foi possível descriptografar ${key}:`,
-      error
-    );
-
-    return null;
+    console.error(`[desktop] Não foi possível descriptografar a configuração local '${key}'.`, error instanceof Error ? error.name : "erro desconhecido");
+    throw new Error(`Não foi possível recuperar '${key}' do armazenamento protegido do Windows. O arquivo foi preservado; não salve novas configurações até recuperar o acesso.`);
   }
 }
 
@@ -1553,10 +1612,9 @@ function migrateLegacyEnvValue(
 
 function resolveSystemConfigKey() {
   const provided = process.env.SYSTEM_CONFIG_KEY?.trim();
-  if (provided) return provided;
-
   const secure = readSecureValue("systemConfigKey");
-  if (secure) return secure;
+  const selected = selectSystemConfigKey({ packaged: app.isPackaged, environmentValue: provided, secureValue: secure });
+  if (selected) return selected;
 
   // Instalações antigas podem conter configuração legada. Nunca gerar
   // chave aleatória sobre dados existentes em SystemSetting.
@@ -1810,6 +1868,7 @@ function resolveMicrosoftConfiguration(): MicrosoftConfiguration {
 
 type ConfigurationInput = {
   databaseUrl?: unknown;
+  systemConfigKey?: unknown;
   organization?: unknown;
   project?: unknown;
   wiki?: unknown;
@@ -1828,6 +1887,7 @@ type ConfigurationInput = {
 
 type ConfigurationValues = {
   databaseUrl: string;
+  systemConfigKey: string;
   organization: string;
   project: string;
   wiki: string;
@@ -1855,6 +1915,7 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
 
   return {
     databaseUrl: text(value.databaseUrl),
+    systemConfigKey: text(value.systemConfigKey),
     organization: text(value.organization),
     project: text(value.project),
     wiki: text(value.wiki),
@@ -1874,6 +1935,9 @@ function normalizeConfigurationInput(input: unknown): ConfigurationValues {
 
 function saveApplicationConfiguration(input: unknown) {
   const value = normalizeConfigurationInput(input);
+  if (value.systemConfigKey && value.systemConfigKey.length < 32) {
+    throw new Error("A SYSTEM_CONFIG_KEY deve ter pelo menos 32 caracteres.");
+  }
 
   const databaseUrl =
     value.databaseUrl ||
@@ -1943,6 +2007,7 @@ function saveApplicationConfiguration(input: unknown) {
   }
 
   saveSecureValue("databaseUrl", databaseUrl);
+  if (value.systemConfigKey) saveSecureValue("systemConfigKey", value.systemConfigKey);
 
   if (hasAllAzure) {
     saveSecureValue("azureOrganization", organization);
@@ -1997,14 +2062,19 @@ async function selectConfigurationFile() {
     return null;
   }
 
+  const size = fs.statSync(selectedFile).size;
+  if (size > 128 * 1024) throw new Error("Arquivo .env muito grande (máximo de 128 KB).");
   const content = fs.readFileSync(selectedFile, "utf8");
 
   return {
     databaseUrl: parseEnvValue(content, "DATABASE_URL") || "",
+    systemConfigKey: parseEnvValue(content, "SYSTEM_CONFIG_KEY") || "",
     organization: parseEnvValue(content, "AZURE_DEVOPS_ORGANIZATION") || "",
     project: parseEnvValue(content, "AZURE_DEVOPS_PROJECT") || "",
     wiki: parseEnvValue(content, "AZURE_DEVOPS_WIKI") || "",
     pat: parseEnvValue(content, "AZURE_DEVOPS_PAT") || "",
+    movideskToken: parseEnvValue(content, "MOVIDESK_TOKEN") || "",
+    movideskUrl: parseEnvValue(content, "MOVIDESK_URL") || "",
     smtpHost: parseEnvValue(content, "SMTP_HOST") || "",
     smtpPort: parseEnvValue(content, "SMTP_PORT") || "",
     smtpSecure: parseEnvValue(content, "SMTP_SECURE") || "",
@@ -2019,8 +2089,10 @@ async function selectConfigurationFile() {
 }
 
 async function showIntegratedSetup(): Promise<string | null> {
+  closeStartupWindow();
   return new Promise((resolve) => {
     setupWindow = new BrowserWindow({
+      icon: path.join(app.getAppPath(), "assets", "hub-icon.png"),
       width: 760,
       height: 720,
       minWidth: 680,
@@ -2038,10 +2110,11 @@ async function showIntegratedSetup(): Promise<string | null> {
 
     const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Configuração inicial</title><style>
       *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f6f8;color:#101828}.page{max-width:720px;margin:auto;padding:32px}.card{background:white;border:1px solid #e4e7ec;border-radius:18px;padding:28px;box-shadow:0 8px 28px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:25px}.lead{color:#667085;margin:0 0 24px}.section{border-top:1px solid #eaecf0;padding-top:20px;margin-top:20px}label{display:block;font-size:13px;font-weight:700;margin:12px 0 6px}input{width:100%;padding:11px 12px;border:1px solid #d0d5dd;border-radius:9px;font-size:14px}small{color:#667085}.actions{display:flex;gap:10px;margin-top:24px}.button{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.primary{background:#18c77a;color:#071a12}.secondary{background:#fff;border:1px solid #18c77a;color:#087443}.error{display:none;margin-top:16px;padding:11px;border-radius:8px;background:#fef3f2;color:#b42318}.optional{font-weight:400;color:#667085}
-    </style></head><body><main class="page"><section class="card"><h1>Bem-vindo ao TechLead Hub</h1><p class="lead">Para concluir a primeira instalação, conecte o aplicativo ao banco de dados. Essa informação será solicitada somente uma vez e ficará protegida pelo Windows.</p><button class="button secondary" id="import">Importar arquivo .env</button><div class="section"><h3>Conexão principal</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>Depois do primeiro acesso, configure o Azure DevOps em Administração &gt; Configurações.</small></div><div id="error" class="error"></div><div class="actions"><button class="button primary" id="save">Conectar e abrir o aplicativo</button></div></section></main><script>
-      const ids=['databaseUrl'];const error=document.getElementById('error');
-      document.getElementById('import').onclick=async()=>{const data=await window.techLeadHub.configuration.importEnv();if(data){ids.forEach(id=>document.getElementById(id).value=data[id]||'')}};
-      document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={};ids.forEach(id=>data[id]=document.getElementById(id).value);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
+    </style></head><body><main class="page"><section class="card"><h1>Central de Recuperação</h1><p class="lead">Instalação inicial ou falha após atualização: verifique a conexão e restaure as configurações sem reinstalar. Credenciais são protegidas pelo Windows.</p><button class="button secondary" id="import">Selecionar arquivo .env</button><div class="section"><h3>Diagnóstico do PostgreSQL</h3><label>DATABASE_URL</label><input id="databaseUrl" type="password" autocomplete="off" placeholder="postgresql://usuario:senha@servidor:5432/banco"><small>O diagnóstico verifica rede e porta. O acesso ao banco será validado após reiniciar.</small><div class="actions"><button class="button secondary" id="diagnose">Testar conectividade</button></div><p id="diagnostic" role="status"></p><label>Chave compartilhada das integrações <span class="optional">(se o banco já possui credenciais)</span></label><input id="systemConfigKey" type="password" autocomplete="off" placeholder="SYSTEM_CONFIG_KEY"><small>Use a mesma chave original das outras instalações. Não gere uma nova; ela permite ler as credenciais Azure e Movidesk já salvas.</small></div><p class="lead">As credenciais Azure e Movidesk são recuperadas do banco após a conexão. A SYSTEM_CONFIG_KEY informada aqui é protegida pelo Windows.</p><div id="error" class="error" role="alert"></div><div class="actions"><button class="button primary" id="save">Validar e reiniciar</button></div></section></main><script>
+      const error=document.getElementById('error');const diagnostic=document.getElementById('diagnostic');
+      document.getElementById('import').onclick=async()=>{try{const data=await window.techLeadHub.configuration.importEnv();if(data){document.getElementById('databaseUrl').value=data.databaseUrl||'';document.getElementById('systemConfigKey').value=data.systemConfigKey||'';diagnostic.textContent='Arquivo selecionado. Confira os campos antes de salvar.'}}catch(e){error.textContent=e?.message||'Falha ao ler arquivo';error.style.display='block'}};
+      document.getElementById('diagnose').onclick=async()=>{diagnostic.textContent='Verificando conectividade...';try{const result=await window.techLeadHub.configuration.diagnoseDatabase(document.getElementById('databaseUrl').value);diagnostic.textContent=result.message}catch(e){diagnostic.textContent='Diagnóstico indisponível.'}};
+      document.getElementById('save').onclick=async()=>{error.style.display='none';try{const data={databaseUrl:document.getElementById('databaseUrl').value,systemConfigKey:document.getElementById('systemConfigKey').value};const check=await window.techLeadHub.configuration.diagnoseDatabase(data.databaseUrl);if(!check.ok)throw new Error(check.message);await window.techLeadHub.configuration.save(data);window.close()}catch(e){error.textContent=e?.message||String(e);error.style.display='block'}};
     </script></body></html>`;
 
     setupWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
@@ -2361,6 +2434,7 @@ function startBackend(
     "[desktop] Backend:",
     backendEntry
   );
+  writeStartupLog("desktop", `Backend: ${backendEntry}`);
 
   startedBackendHere =
     true;
@@ -2426,6 +2500,9 @@ function startBackend(
           NODE_ENV:
             "production",
 
+          APP_VERSION:
+            app.getVersion(),
+
           HOST:
             BACKEND_HOST,
 
@@ -2457,6 +2534,7 @@ function startBackend(
           .trim();
 
       if (message) {
+        writeStartupLog("backend stdout", message);
         console.log(
           `[backend] ${message}`
         );
@@ -2475,6 +2553,7 @@ function startBackend(
           .trim();
 
       if (message) {
+        writeStartupLog("backend stderr", message);
         console.error(
           `[backend] ${message}`
         );
@@ -2485,6 +2564,7 @@ function startBackend(
   backendProcess.on(
     "error",
     (error) => {
+      writeStartupLog("backend spawn error", `${error.name}: ${error.message}`);
       console.error(
         "[desktop] Falha ao iniciar backend:",
         error
@@ -2495,6 +2575,7 @@ function startBackend(
   backendProcess.on(
     "exit",
     (code, signal) => {
+      writeStartupLog("backend exit", `code=${code ?? "null"}; signal=${signal ?? "none"}`);
       console.log(`[desktop] Backend finalizado. Code=${code}, Signal=${signal}`);
       backendProcess = null;
       if (isQuitting || backendStopRequested || !startedBackendHere) return;
@@ -2641,6 +2722,26 @@ async function checkBackendHealth() {
     probe.status >= 200 &&
     probe.status < 300
   );
+}
+
+async function warnIfIntegrationConfigurationNeedsRecovery() {
+  const probe = await requestProbe(HEALTH_URL);
+  if (!probe.body) return;
+
+  try {
+    const payload = JSON.parse(probe.body) as { integrationsConfiguration?: string };
+    if (payload.integrationsConfiguration !== "unreadable") return;
+  } catch {
+    return;
+  }
+
+  await dialog.showMessageBox({
+    type: "warning",
+    title: APP_NAME,
+    message: "As integrações precisam recuperar a chave de criptografia.",
+    detail: "O banco está acessível, mas as credenciais Azure/Movidesk não puderam ser descriptografadas. Os dados permanecem preservados. Abra Configurações > Diagnóstico e informe a SYSTEM_CONFIG_KEY original usada quando as credenciais foram salvas. Não grave novas credenciais antes da recuperação.",
+    buttons: ["Entendi"],
+  });
 }
 
 async function getBackendReadyProbe() {
@@ -2803,7 +2904,11 @@ function getWindowMetrics() {
 async function ensureTray() {
   if (tray || process.platform !== "win32") return;
   try {
-    const icon = await app.getFileIcon(process.execPath, { size: "small" });
+    const iconPath = path.join(app.getAppPath(), "assets", "hub-icon.png");
+    const appIcon = nativeImage.createFromPath(iconPath);
+    const icon = appIcon.isEmpty()
+      ? await app.getFileIcon(process.execPath, { size: "small" })
+      : appIcon;
     tray = new Tray(icon);
     tray.setToolTip(APP_NAME);
     const show = () => {
@@ -2826,6 +2931,65 @@ async function ensureTray() {
     // Se não houver bandeja disponível, preservar o encerramento normal.
     console.warn("[desktop] Não foi possível iniciar ícone de bandeja.");
   }
+}
+
+function renderStartupStatus() {
+  if (!startupWindow || startupWindow.isDestroyed() || startupWindow.webContents.isDestroyed()) return;
+  const status = JSON.stringify(startupStatus);
+  void startupWindow.webContents.executeJavaScript(
+    `const statusNode=document.getElementById("startup-status");if(statusNode)statusNode.textContent=${status};`
+  ).catch(() => undefined);
+}
+
+function updateStartupStatus(status: string) {
+  startupStatus = status;
+  writeStartupLog("startup", status);
+  if (startupWindow && !startupWindow.isDestroyed()) {
+    startupWindow.setProgressBar(0.5, { mode: "indeterminate" });
+    renderStartupStatus();
+  }
+}
+
+function showStartupWindow() {
+  if (startupWindow && !startupWindow.isDestroyed()) return;
+  startupStatus = "Preparando o TechLead Hub…";
+  startupWindow = new BrowserWindow({
+    width: 460,
+    height: 250,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    center: true,
+    backgroundColor: "#081521",
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+  });
+  startupWindow.setMenuBarVisibility(false);
+  startupWindow.webContents.on("did-finish-load", renderStartupStatus);
+  startupWindow.once("ready-to-show", () => {
+    if (!startupWindow || startupWindow.isDestroyed()) return;
+    startupWindow.setProgressBar(0.5, { mode: "indeterminate" });
+    startupWindow.show();
+    renderStartupStatus();
+  });
+  startupWindow.on("closed", () => { startupWindow = null; });
+
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Iniciando TechLead Hub</title><style>
+    *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:grid;place-items:center;background:radial-gradient(ellipse at 20% 0%,rgba(15,120,107,.23),transparent 55%),#081521;color:#e9f3f7;font:14px "Segoe UI",Arial,sans-serif}.card{width:100%;padding:34px 38px;text-align:center}.brand{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:19px;color:#c2d2dc;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase}.logo{display:grid;place-items:center;width:34px;height:34px;border:1px solid #16c784;border-radius:11px;color:#16c784;font-size:20px;font-weight:900;box-shadow:0 0 20px rgba(22,199,132,.13)}h1{margin:0 0 9px;font-size:21px;letter-spacing:-.3px}.status{min-height:22px;color:#a9beca;font-size:13px}.track{height:5px;margin:22px auto 12px;overflow:hidden;border-radius:99px;background:#173043}.bar{width:38%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0abf78,#39edaa);box-shadow:0 0 15px rgba(22,199,132,.38);animation:loading 1.45s ease-in-out infinite}@keyframes loading{0%{transform:translateX(-110%)}100%{transform:translateX(290%)}}.hint{color:#708a99;font-size:11px}@media(prefers-reduced-motion:reduce){.bar{animation-duration:3s}}
+    </style></head><body><main class="card"><div class="brand"><span class="logo">H</span><span>Hub Suporte Simer</span></div><h1>Iniciando sua central de trabalho</h1><div id="startup-status" class="status">Preparando o TechLead Hub…</div><div class="track" role="progressbar" aria-label="Carregando"><div class="bar"></div></div><div class="hint">Aguarde enquanto conectamos os serviços e seus dados.</div></main></body></html>`;
+  const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  void startupWindow.loadURL(url).catch((error) => writeStartupLog("startup-window", error instanceof Error ? error.message : error));
+  writeStartupLog("desktop", `Iniciando ${APP_NAME} ${app.getVersion()}`);
+}
+
+function closeStartupWindow() {
+  if (!startupWindow || startupWindow.isDestroyed()) return;
+  startupWindow.setProgressBar(-1);
+  startupWindow.close();
+  startupWindow = null;
 }
 
 function createWindow() {
@@ -2852,6 +3016,9 @@ function createWindow() {
       title:
         APP_NAME,
 
+      icon:
+        path.join(app.getAppPath(), "assets", "hub-icon.png"),
+
       backgroundColor:
         "#f5f7fa",
 
@@ -2876,6 +3043,8 @@ function createWindow() {
 
         webSecurity:
           true,
+        // Keep notification polling and meeting reminders active in the tray.
+        backgroundThrottling: false,
       },
     });
 
@@ -2962,6 +3131,8 @@ function createWindow() {
       async (
         error
       ) => {
+        writeStartupLog("desktop error", error instanceof Error ? error.stack ?? error.message : error);
+        closeStartupWindow();
         console.error(
           "[desktop] Falha ao carregar interface:",
           error
@@ -2997,6 +3168,7 @@ function createWindow() {
       mainWindow?.show();
 
       mainWindow?.focus();
+      closeStartupWindow();
 
       mainWindow
         ?.webContents
@@ -3021,25 +3193,28 @@ function createWindow() {
 ========================================================= */
 
 async function bootstrap() {
-  console.log(
-    `[desktop] Iniciando ${APP_NAME} ${app.getVersion()}...`
-  );
+  showStartupWindow();
+  updateStartupStatus("Verificando conexão com o Hub…");
 
   if (USE_CENTRAL_SERVER) {
+    updateStartupStatus("Aguardando o servidor central…");
     console.log(`[desktop] Usando servidor central: ${APP_URL}`);
     const centralReady = await waitForBackendReady();
     if (!centralReady) {
-      await dialog.showMessageBox({
+      closeStartupWindow();
+      const result = await dialog.showMessageBox({
         type: "error",
         title: APP_NAME,
         message: "O servidor central do TechLead Hub não está disponível.",
-        detail: `Não foi possível acessar ${APP_URL}. Verifique a rede/VPN e tente novamente.`,
-        buttons: ["Fechar"],
+        detail: startupFailureDetails(`Não foi possível acessar ${APP_URL}. Verifique a rede/VPN e tente novamente.`),
+        buttons: ["Abrir log", "Fechar"],
       });
+      if (result.response === 0) await openStartupLog();
       app.quit();
       return;
     }
     createWindow();
+    void warnIfIntegrationConfigurationNeedsRecovery();
     scheduleInitialUpdateCheck();
     return;
   }
@@ -3048,15 +3223,30 @@ async function bootstrap() {
    * Garante um segredo persistente para autenticação do backend.
    * Instalações antigas são migradas automaticamente.
    */
-  const jwtSecret =
-    resolveJwtSecret();
+  let jwtSecret: string;
+  try {
+    updateStartupStatus("Carregando as configurações protegidas…");
+    jwtSecret = resolveJwtSecret();
+  } catch (error) {
+    writeStartupLog("configuration", error instanceof Error ? error.message : error);
+    closeStartupWindow();
+    await dialog.showMessageBox({
+      type: "error",
+      title: APP_NAME,
+      message: "Não foi possível ler a configuração local do TechLead Hub.",
+      detail: startupFailureDetails(error instanceof Error ? error.message : "O arquivo local foi preservado. Recupere-o antes de iniciar para evitar substituir credenciais existentes."),
+      buttons: ["Fechar"],
+    });
+    app.quit();
+    return;
+  }
 
   /*
    * Se já houver uma instância válida do backend na porta 3333
    * e ela conseguir consultar o banco, apenas reutilizamos.
    */
-  const backendAlreadyReady =
-    await checkBackendReady();
+  updateStartupStatus("Verificando se o backend já está ativo…");
+  const backendAlreadyReady = await checkBackendReady();
 
   if (
     backendAlreadyReady
@@ -3066,6 +3256,8 @@ async function bootstrap() {
     );
 
     createWindow();
+
+    void warnIfIntegrationConfigurationNeedsRecovery();
 
     scheduleInitialUpdateCheck();
 
@@ -3078,31 +3270,35 @@ async function bootstrap() {
    * exemplo, após atualização/reinício enquanto o backend anterior ainda
    * está encerrando ou quando ele iniciou em modo degradado.
    */
-  const backendAlreadyOnline =
-    await checkBackendHealth();
+  updateStartupStatus("Verificando a disponibilidade do serviço…");
+  const backendAlreadyOnline = await checkBackendHealth();
 
   if (backendAlreadyOnline) {
     console.log(
       "[desktop] Backend já está respondendo; aguardando somente a prontidão do banco."
     );
 
+    updateStartupStatus("O serviço iniciou. Aguardando conexão com o banco…");
     const existingDatabaseReady =
       await waitForBackendReady();
 
     if (existingDatabaseReady) {
       createWindow();
+      void warnIfIntegrationConfigurationNeedsRecovery();
       scheduleInitialUpdateCheck();
       return;
     }
 
-    await dialog.showMessageBox({
+    closeStartupWindow();
+    const result = await dialog.showMessageBox({
       type: "error",
       title: APP_NAME,
-      message: "O backend está online, mas o banco de dados não ficou disponível.",
+      message: "O serviço iniciou, mas a conexão com o banco não ficou pronta.",
       detail:
-        "A porta 3333 está respondendo normalmente. Verifique a conexão com o PostgreSQL/rede/VPN e tente novamente. O TechLead Hub não iniciará uma segunda instância do backend.",
-      buttons: ["Fechar"],
+        startupFailureDetails("A porta 3333 está respondendo. Verifique a conexão com o PostgreSQL, a rede/VPN e a porta 5432. O Hub não iniciará uma segunda instância do backend."),
+      buttons: ["Abrir log", "Fechar"],
     });
+    if (result.response === 0) await openStartupLog();
 
     app.quit();
     return;
@@ -3112,6 +3308,7 @@ async function bootstrap() {
     await resolveDatabaseUrl();
 
   if (!databaseUrl) {
+    closeStartupWindow();
     await dialog.showMessageBox(
       {
         type:
@@ -3137,6 +3334,7 @@ async function bootstrap() {
     return;
   }
 
+  updateStartupStatus("Iniciando os serviços locais…");
   startBackend(
     databaseUrl,
     jwtSecret,
@@ -3151,7 +3349,8 @@ async function bootstrap() {
   if (
     !backendOnline
   ) {
-    await dialog.showMessageBox(
+    closeStartupWindow();
+    const failure = await dialog.showMessageBox(
       {
         type:
           "error",
@@ -3160,17 +3359,37 @@ async function bootstrap() {
           APP_NAME,
 
         message:
-          "Não foi possível iniciar o TechLead Hub.",
+          backendProcess ? "O serviço ainda está iniciando." : "O serviço encerrou antes de ficar disponível.",
 
         detail:
-          `O backend não respondeu na porta ${BACKEND_PORT} dentro do tempo esperado.`,
+          startupFailureDetails(`O backend não respondeu na porta ${BACKEND_PORT} em até ${Math.round(BACKEND_START_TIMEOUT / 1000)} segundos. Consulte o log para ver a etapa e o erro retornado.`),
 
         buttons: [
+          "Abrir log",
+          "Recuperar configurações",
           "Fechar",
         ],
+        defaultId: 0,
+        cancelId: 2,
       }
     );
 
+    if (failure.response === 0) {
+      await openStartupLog();
+      app.quit();
+      return;
+    }
+
+    if (failure.response === 1) {
+      stopBackend();
+      const corrected = await showIntegratedSetup();
+      if (corrected) {
+        isQuitting = true;
+        app.relaunch();
+        app.exit(0);
+        return;
+      }
+    }
     app.quit();
 
     return;
@@ -3180,12 +3399,14 @@ async function bootstrap() {
     "[desktop] Backend online. Validando banco de dados..."
   );
 
+  updateStartupStatus("Conectando ao banco e preparando os dados…");
   const databaseReady =
     await waitForBackendReady();
 
   if (
     !databaseReady
   ) {
+    closeStartupWindow();
     const readyProbe = await getBackendReadyProbe();
     let diagnostic =
       "O backend foi iniciado, mas o PostgreSQL não respondeu corretamente.";
@@ -3217,20 +3438,25 @@ async function bootstrap() {
           APP_NAME,
 
         message:
-          "Não foi possível conectar ao banco de dados.",
+          "O banco de dados ainda não ficou pronto.",
 
         detail:
-          `${diagnostic} Verifique principalmente se esta máquina consegue alcançar o servidor PostgreSQL pela rede/VPN e se a porta 5432 está liberada.`,
+          startupFailureDetails(`${diagnostic} Verifique se esta máquina alcança o PostgreSQL pela rede/VPN e se a porta 5432 está liberada.`),
 
-        buttons: ["Reconfigurar", "Fechar"],
+        buttons: ["Abrir log", "Reconfigurar", "Fechar"],
         defaultId: 0,
-        cancelId: 1,
+        cancelId: 2,
       }
     );
 
-    stopBackend();
-
     if (response.response === 0) {
+      await openStartupLog();
+      app.quit();
+      return;
+    }
+
+    stopBackend();
+    if (response.response === 1) {
       const correctedDatabaseUrl = await showIntegratedSetup();
 
       if (correctedDatabaseUrl) {
@@ -3250,7 +3476,10 @@ async function bootstrap() {
     "[desktop] Backend e banco de dados prontos."
   );
 
+  updateStartupStatus("Tudo pronto. Abrindo o TechLead Hub…");
   createWindow();
+
+  void warnIfIntegrationConfigurationNeedsRecovery();
 
   scheduleInitialUpdateCheck();
 }
@@ -3261,6 +3490,10 @@ async function bootstrap() {
 
 const gotSingleInstanceLock =
   app.requestSingleInstanceLock();
+
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+}
 
 if (
   !gotSingleInstanceLock
@@ -3304,12 +3537,14 @@ if (
       async (
         error
       ) => {
+        writeStartupLog("desktop error", error instanceof Error ? error.stack ?? error.message : error);
+        closeStartupWindow();
         console.error(
           "[desktop] Erro durante inicialização:",
           error
         );
 
-        await dialog.showMessageBox(
+        const failure = await dialog.showMessageBox(
           {
             type:
               "error",
@@ -3321,17 +3556,16 @@ if (
               "O TechLead Hub não conseguiu iniciar.",
 
             detail:
-              error instanceof Error
-                ? error.message
-                : String(
-                    error
-                  ),
+              startupFailureDetails(error instanceof Error ? error.message : String(error)),
 
             buttons: [
+              "Abrir log",
               "Fechar",
             ],
           }
         );
+
+        if (failure.response === 0) await openStartupLog();
 
         app.quit();
       }

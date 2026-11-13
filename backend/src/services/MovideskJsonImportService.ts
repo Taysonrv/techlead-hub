@@ -2,10 +2,14 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { observeTicketCategory } from "./TicketCategoryHistoryService";
 import {
   areMovideskTeamsAlertsEnabled,
+  isMovideskNewTicketStatus,
   shouldAlertForMovideskSubject,
 } from "./MovideskAlertMatcher";
+import { enqueueNewSupportTicket } from "./TeamsWorkflowEvents";
+import { isInOperationalSimerSupportPortfolio } from "../domain/OperationalScope";
 
 type JsonObject = Record<string, unknown>;
 
@@ -56,6 +60,7 @@ export class MovideskJsonImportService {
       fileHash?: string | null;
       userId?: number | null;
       source?: "MOVIDESK_JSON" | "MOVIDESK_API";
+      workflowEventSince?: Date | null;
     } = {},
   ): Promise<ImportResult> {
     if (!fileBuffer?.length) {
@@ -124,10 +129,22 @@ export class MovideskJsonImportService {
         const existing = await prisma.$transaction(async (tx) => {
           const previous = await tx.ticket.findUnique({
             where: { movideskId: ticket.movideskId },
-            select: { id: true, cause: true, reason: true, businessArea: true },
+            select: {
+              id: true, ticketType: true, cause: true, reason: true, businessArea: true, category: true, lastUpdate: true,
+              createdDate: true, client: true, owner: true, service: true,
+              serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
+              ownerTeam: true, isDeleted: true,
+            },
           });
+          const previouslyInPortfolio = previous
+            ? isInOperationalSimerSupportPortfolio(previous)
+            : false;
 
-          await tx.ticket.upsert({
+          const staleCategoryPayload = Boolean(previous?.lastUpdate && (!ticket.lastUpdate || ticket.lastUpdate < previous.lastUpdate));
+          const observedCategory = staleCategoryPayload || !ticket.category?.trim()
+            ? previous?.category ?? ticket.category
+            : ticket.category;
+          const savedTicket = await tx.ticket.upsert({
             where: { movideskId: ticket.movideskId },
             create: {
               ...ticket,
@@ -138,11 +155,15 @@ export class MovideskJsonImportService {
             },
             update: {
               ...ticket,
+              category: observedCategory,
+              lastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
+              // Payloads parciais não devem apagar o tipo oficial já identificado.
+              ticketType: ticket.ticketType ?? previous?.ticketType ?? null,
               // A API pode deixar de devolver customFieldValues históricos. Não
               // apagamos uma classificação oficial já persistida só porque o
               // campo deixou de vir no payload atual.
-              cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
-              reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
+              cause: this.isCategory(observedCategory, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
+              reason: this.isCategory(observedCategory, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
               businessArea: ticket.businessArea ?? previous?.businessArea ?? null,
               importSource: source,
               importBatch: batchId,
@@ -151,11 +172,20 @@ export class MovideskJsonImportService {
             },
           });
 
+          await observeTicketCategory(tx, {
+            ticketId: savedTicket.id,
+            previousCategory: previous?.category ?? null,
+            category: observedCategory,
+            source,
+            sourceLastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
+          });
+
           // Só a primeira inserção do ticket gera evento. A chave única protege
           // contra concorrência/reprocessamento e a fila é gravada atomicamente.
           if (
             areMovideskTeamsAlertsEnabled() &&
             !previous &&
+            isMovideskNewTicketStatus(ticket.status) &&
             shouldAlertForMovideskSubject(ticket.subject)
           ) {
             await tx.teamsAlertOutbox.createMany({
@@ -170,6 +200,20 @@ export class MovideskJsonImportService {
               skipDuplicates: true,
             });
           }
+          const eventWithinIncrementalWindow = Boolean(
+            options.workflowEventSince
+            && (ticket.lastUpdate ?? ticket.createdDate) >= options.workflowEventSince,
+          );
+          await enqueueNewSupportTicket(tx, previouslyInPortfolio, eventWithinIncrementalWindow, {
+              movideskId: ticket.movideskId,
+              subject: ticket.subject,
+              client: ticket.client ?? null,
+              createdDate: ticket.createdDate,
+              urgency: ticket.urgency ?? null,
+              status: ticket.status,
+              owner: ticket.owner ?? null,
+              ownerTeam: ticket.ownerTeam ?? null,
+          });
           return previous;
         });
 
@@ -265,6 +309,7 @@ export class MovideskJsonImportService {
 
     return {
       movideskId,
+      ticketType: [1, 2].includes(Number(row.type)) ? Number(row.type) : null,
       protocol: this.toText(row.protocol) ?? String(movideskId),
       subject,
       category: this.toText(row.category),
@@ -426,7 +471,19 @@ export class MovideskJsonImportService {
   private toDate(value: unknown) {
     const text = this.toText(value);
     if (!text) return null;
-    const date = new Date(text);
+    // O Movidesk pode retornar DateTime sem sufixo de fuso. Esses valores
+    // representam UTC; sem normalização, o Node os interpreta como horário
+    // local do servidor e o card do Teams volta a aplicar America/Sao_Paulo,
+    // deslocando a abertura em três horas.
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
+    const normalized = hasTimezone
+      ? text
+      : /^\d{4}-\d{2}-\d{2} \d{2}:/.test(text)
+        ? `${text.replace(" ", "T")}Z`
+        : /T\d{2}:\d{2}/.test(text)
+          ? `${text}Z`
+          : text;
+    const date = new Date(normalized);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 

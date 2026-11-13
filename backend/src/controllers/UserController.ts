@@ -254,6 +254,33 @@ export class UserController {
     }
   }
 
+  async ticketOwnershipByFunction(request: AuthenticatedRequest, response: Response) {
+    try {
+      const data = await userService.ticketOwnershipByFunction(getAuthenticatedUserId(request));
+      return response.status(200).json(data);
+    } catch (error) { return handleUserError(error, response); }
+  }
+
+  async updateMovideskOwnerName(request: AuthenticatedRequest, response: Response) {
+    try {
+      const adminUserId = getAuthenticatedUserId(request);
+      const targetUserId = getUserIdFromParams(request.params.id);
+      const user = await userService.updateMovideskOwnerName(adminUserId, targetUserId, request.body?.movideskOwnerName);
+      return response.status(200).json({ message: "Responsável Movidesk vinculado com sucesso.", user });
+    } catch (error) { return handleUserError(error, response); }
+  }
+
+  async updateJobFunction(request: AuthenticatedRequest, response: Response) {
+    try {
+      const adminUserId = getAuthenticatedUserId(request);
+      const targetUserId = getUserIdFromParams(request.params.id);
+      const user = await userService.updateUserJobFunction(adminUserId, targetUserId, request.body?.jobFunction);
+      return response.status(200).json({ message: "Função do colaborador atualizada com sucesso.", user });
+    } catch (error) {
+      return handleUserError(error, response);
+    }
+  }
+
   async updatePermissions(request: AuthenticatedRequest, response: Response) {
     try {
       const adminUserId = getAuthenticatedUserId(request);

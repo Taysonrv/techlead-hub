@@ -3,6 +3,7 @@ import { GlobalController } from "../controllers/GlobalController";
 import { prisma } from "../database/prisma";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
 import { calendarMeetingService } from "../services/CalendarMeetingService";
+import { calendarWeatherService } from "../services/CalendarWeatherService";
 
 const globalRoutes = Router();
 const controller = new GlobalController();
@@ -10,6 +11,23 @@ globalRoutes.get("/search", controller.search);
 globalRoutes.get("/investigate", controller.investigate);
 globalRoutes.get("/investigate-topic", controller.investigateTopic);
 globalRoutes.get("/calendar", controller.calendar);
+globalRoutes.get("/calendar/weather", async (req: AuthenticatedRequest, res) => {
+  try {
+    return res.json(await calendarWeatherService.getForecast(req.auth!.userId));
+  } catch (error) {
+    const typed = error as { statusCode?: number; message?: string };
+    return res.status(typed.statusCode ?? 500).json({ message: typed.message ?? "Não foi possível carregar a previsão do tempo." });
+  }
+});
+globalRoutes.put("/calendar/weather/location", async (req: AuthenticatedRequest, res) => {
+  try {
+    const city = await calendarWeatherService.saveLocation(req.auth!.userId, req.body?.city);
+    return res.json({ city });
+  } catch (error) {
+    const typed = error as { statusCode?: number; message?: string };
+    return res.status(typed.statusCode ?? 500).json({ message: typed.message ?? "Não foi possível salvar a cidade da previsão." });
+  }
+});
 globalRoutes.get("/calendar/participants", async (_req: AuthenticatedRequest, res) => {
   try {
     return res.json({ participants: await calendarMeetingService.participants() });

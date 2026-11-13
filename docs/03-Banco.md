@@ -9,6 +9,8 @@
 | Operação | `Ticket`, `AzureWorkItem` |
 | Chat | `ChatChannel`, `ChatChannelMember`, `ChatMessage` |
 | Configuração | `SystemSetting` |
+| Calendário | `CalendarMeeting`, `CalendarMeetingParticipant` |
+| Integrações auxiliares | Outbox de alertas Teams, catálogos/respostas Movidesk e snapshots de qualidade |
 
 ## Chat
 
@@ -25,6 +27,12 @@
 - `SystemSetting.value` é cifrado com AES-256-GCM.
 - `SYSTEM_CONFIG_KEY` deve ter pelo menos 32 caracteres e permanecer fora do banco.
 - Backups devem ser criptografados, ter retenção definida e restauração testada.
+
+## Crescimento e retenção
+
+- O histórico operacional e payloads brutos são mantidos para análises e reconciliação; não há expurgo geral automático.
+- Categorias e decisões pendentes estão em [`11-Retencao-de-Dados.md`](11-Retencao-de-Dados.md). Medir tamanho por tabela e backups mensalmente, sem tratar a medição como autorização para excluir dados.
+- Ao implementar um prazo aprovado, excluir por categoria e lote, manter auditoria da execução e considerar dependências entre ticket, ações, históricos e anexos.
 
 ## Migrações
 

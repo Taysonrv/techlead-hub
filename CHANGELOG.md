@@ -1,5 +1,126 @@
 # Changelog
 
+## 2.1.0-rc.14 — 2026-11-13
+
+### Resultados e operação
+- Gráficos compartilhados: linhas em SVG direto, donuts CSS e barras HTML, sem dependência da medição automática do Recharts; cards de equipe com altura natural e sem molduras duplicadas.
+- Resultados da Equipe: gráfico com altura explícita e consulta por ponto/intervalo, série adaptativa sem corte após 370 dias, CSAT pela data da pesquisa, rankings independentes de resoluções/backlog, entregas filtradas e exportação do detalhamento para Excel.
+- Clientes: visão integrada, seções abertas, cards padronizados, comparações de intervalos, séries mensais e PDF no cabeçalho.
+- Correções/evoluções: Tasks únicas concluídas por `azureClosedAt`, agrupadas por versão; inclui tickets antigos vinculados ao cliente. Versão informada não comprova instalação/homologação.
+- Gráficos: legendas sem checkbox, consulta por ponto/mês/série e ocultação da participação por cliente no foco individual.
+- Liderança/coordenação: resolutividade, evidências de OKRs, acompanhamento semanal e restrições de acesso.
+- Pendências públicas, fontes de SLA/CSAT/primeiro contato e favoritos de cards/rotinas revisados.
+
+### Desktop e confiabilidade
+- Popups internos incluem avisos recentes habilitados de versões e Tasks; excedentes não são descartados ao atingir a fila de dois avisos.
+- Avisos do Windows são confirmados como exibidos apenas após sucesso do canal; permissão do navegador não bloqueia o IPC nativo.
+- WeatherAPI: chave centralizada e criptografada, validada antes de substituir e sem credenciais no instalador. Administrador configura em Dados; cidade permanece por usuário.
+- Dependência transitiva `qs` atualizada para remover alerta moderado da auditoria npm.
+- CSP libera somente `https://cdn.weatherapi.com` para ícones do clima; cache distingue cidade/estado.
+
+> Candidata beta. Validação real de popup do Windows, atualização rc.13 → rc.14 e previsão com chave válida requerem execução do aplicativo instalado.
+
+## 2.1.0-rc.13 — 2026-10-30
+
+### Inicialização e diagnóstico
+- O Desktop mostra uma janela de carregamento com o estágio atual enquanto inicia o backend e conecta ao banco.
+- A inicialização aguarda até 60 segundos para permitir conexão e preparação do banco em máquinas mais lentas.
+- Saída e erros do backend ficam registrados localmente em `startup.log`, com rotação do arquivo e ocultação de segredos conhecidos.
+- Falhas de inicialização informam o caminho do log e permitem abri-lo para diagnóstico antes de recuperar configurações.
+
+> Pré-release beta. Validar atualização, início em máquina configurada e primeira execução em conta Windows sem configuração local.
+
+## 2.1.0-rc.12 — 2026-10-30
+
+### Integração com Teams
+- A URL base do Movidesk agora pode ser configurada uma vez por um administrador nas configurações compartilhadas dos fluxos do Teams.
+- Os cards montam os links de atendimento com essa configuração central; as instalações Desktop não dependem mais de `TEAMS_TICKET_BASE_URL` em um `.env` local.
+- A URL é validada como HTTPS antes de ser salva e aplicada sem reiniciar o Hub.
+
+> Pré-release beta. Após atualizar, um administrador deve informar `https://suporte.aliare.co` em “URL base do Movidesk” e salvar os fluxos do Teams.
+
+## 2.1.0-rc.11 — 2026-10-30
+
+### Recuperação de integrações
+- O importador de `.env` reconhece arquivos UTF-8 com BOM, comuns em alguns editores do Windows.
+- No Desktop instalado, a chave recuperada e armazenada pelo Windows tem precedência sobre uma variável de ambiente antiga, evitando que ela sobrescreva a recuperação após reiniciar.
+- O diagnóstico separa a conectividade do banco da legibilidade das credenciais: informa banco pronto mesmo quando a chave de integração é incompatível.
+
+> Pré-release beta. Após atualizar, importe o `.env` original que contém a `SYSTEM_CONFIG_KEY` usada quando as credenciais foram salvas e confirme a recuperação. Se essa chave não corresponder ao histórico, as credenciais não podem ser descriptografadas; nenhum segredo deve ser enviado em chamados ou chats.
+
+## 2.1.0-rc.10 — 2026-10-29
+
+### Configurações e acesso
+- Usuários autenticados podem consultar as configurações e o estado das integrações em modo somente leitura; campos e botões de alteração ficam disponíveis apenas para administradores.
+- A API reforça a permissão de administrador nas gravações, testes de credenciais, recuperação e configuração dos fluxos do Teams.
+- Registros legados ainda legíveis pela chave local podem ser recriptografados com a chave compartilhada durante a recuperação confirmada.
+
+### Atualização e instalação
+- O backend Desktop passa a informar a versão real do aplicativo no diagnóstico.
+- A assinatura Authenticode do instalador é opcional na publicação. Sem certificado, o Windows pode exibir um aviso do SmartScreen até que o arquivo acumule reputação.
+
+> Pré-release beta. Validar instalação e atualização Desktop, leitura somente para usuários, gravação administrativa e recuperação das integrações em homologação.
+
+## 2.1.0-rc.9 — 2026-10-29
+
+### Operação e indicadores
+- Dashboard e Desempenho/SLA receberam padronização visual, linhas retas nos gráficos e revisão dos indicadores operacionais.
+- Pendências ganhou recorte por analista e ajustes para não classificar Tasks concluídas como pendências, além de melhorias na leitura da dívida operacional.
+- Cards de backlog e resolução por agente receberam ajustes de apresentação e interação para análise da coordenação.
+
+### Notificações e colaboração
+- Novos fluxos opcionais do Teams cobrem tickets Novos encaminhados às equipes de Suporte e Tasks Azure abertas pelo N3 ou retornadas ao estado Registro, com controles independentes.
+- A sincronização completa/histórica não dispara alertas de eventos antigos como se fossem novos.
+- Notificações do Desktop podem aparecer com som quando o aplicativo está minimizado; permanecem disponíveis no sino até serem lidas.
+- O painel lateral de Tasks destaca a última alteração e usa ações rápidas mais compactas.
+
+### Desktop, calendário e estabilidade
+- O calendário associa a cidade da previsão ao usuário e resume as condições meteorológicas nos dias disponíveis.
+- A identidade visual foi refinada em ícones, sidebar, cards e gráficos, nos temas claro e escuro.
+- A inicialização do Desktop prepara estruturas compatíveis do banco para as novas funções de clima e notificações, preservando as configurações existentes durante atualizações.
+- A tela de novidades apresenta todos os destaques da versão no primeiro acesso e volta a aparecer quando uma nova versão é instalada.
+
+> Pré-release beta. Validar o CI, instalação/atualização Desktop, integração PostgreSQL e os fluxos operacionais no ambiente de homologação antes da publicação.
+
+## Em preparação — modernização visual executiva (branch de homologação)
+
+### Fundação de apresentação
+- Diagnóstico do frontend React/MUI/Vite e plano de migração por fases, preservando contratos de API, rotas, Prisma e backend.
+- Tokens CSS semânticos de tema claro e escuro: superfícies, texto, bordas, destaques, estados, espaçamento, raios, sombras, tipografia e movimento reduzido.
+- Melhorias incrementais prévias nos indicadores, seções, cabeçalhos, filtros, tabelas e estados de conteúdo.
+- Dashboard: indicadores essenciais passam a aparecer imediatamente após o cabeçalho, antes dos atalhos e do workspace; título de seção e contagem de indicadores adicionados sem alterar métricas ou filtros.
+- Estados de conteúdo: wrapper genérico AsyncState e suporte opcional a retry, ação vazia e detalhe técnico; adoção pelas telas segue em andamento.
+- Reorganização da análise secundária do Dashboard com títulos executivos e espaçamento consistente; gráfico de evolução permanece em destaque.
+- Sidebar com superfície azul-marinho em gradiente; busca global da topbar com superfície elevada e maior área de interação.
+- Componente `StatusPill` tipado criado para adoção progressiva em telas operacionais (sem alteração de status de negócio).
+- Telas Tickets e Clientes passaram a usar `AsyncState` para carregamento/erro sem alterar as consultas; indicadores de risco de Clientes adotam `StatusPill`.
+- Pontos de Atenção e Desempenho passaram a usar `AsyncState` para carregamento/erro; indicador de indício de encerramento adota `StatusPill`.
+- Minha Operação e Pendências: carregamento padronizado com `AsyncState`/`ContentState`; Pendências recebe estado vazio contextual e erro de carregamento, mantendo filtros, Kanban e listas.
+- Analistas, Serviços e Versões: adoção de `AsyncState` nos carregamentos/erros iniciais, preservando gráficos, filtros e ações.
+- Configurações e Usuários: estados de carregamento migrados para `ContentState`; demais módulos ainda exigem auditoria individual e homologação desktop.
+- Liderança Técnica e Central da Coordenação: estados iniciais de carregamento/erro padronizados; Coordenação mantém ação de tentar novamente e estado vazio contextual.
+- Base de Conhecimento: status de conexão com Wiki Azure padronizado via `StatusPill` e estado vazio via `ContentState`.
+- Central de Investigação: estados de início e ausência de correlações migrados para `ContentState`.
+- Mapa SIMER: carregamento inicial da investigação migrado para `ContentState`, preservando o indicador de carregamento da árvore.
+- `ContentState` passa a utilizar tokens semânticos de superfície, borda e raio, melhorando consistência claro/escuro.
+- Diagnóstico preliminar do backend documentado em `docs/backend-evolution-diagnostic.md`, sem alterar API, schema ou dependências.
+- Segurança dos uploads Movidesk: validação preliminar de extensão e assinatura ZIP para XLSX e conteúdo inicial JSON antes de preview/importação; testes unitários adicionados.
+- Consolidação visual: painéis de gráficos com superfícies semânticas claro/escuro e cabeçalhos compactos em telas pequenas.
+- Responsividade: tabelas com rolagem horizontal contida no painel, prevenção de overflow em cards e espaçamento reduzido em células no mobile.
+- Cabeçalhos de páginas: título fluido em janelas estreitas, espaçamento adaptativo e sombras padronizadas.
+- Seções executivas: superfícies, sombras e cantos conectados aos tokens visuais compartilhados.
+- Shell Web/Electron: limites de largura para o conteúdo principal em janelas redimensionadas; busca global e avisos de atualização limitados ao espaço disponível.
+- Sidebar: modo compacto de 76 px com navegação por ícones, alternância expandir/recolher, preferência local persistente e atalho de perfil no rodapé.
+- Dashboard executivo: aproximação visual da referência enviada, com cards em gradientes azul/turquesa, realce de gráficos, profundidade sutil nos temas claro/escuro e ajustes mobile; preservados KPIs e séries reais.
+- Sidebar compacta: removido perfil duplicado (permanece apenas o superior), eliminadas setas dos grupos recolhidos e aprimorados separadores, seleção e badges dos ícones.
+- Dashboard executivo: grade de KPIs responsiva com quatro colunas em desktop amplo e painéis analíticos em duas colunas a partir de telas grandes; sem alteração dos indicadores ou drilldowns.
+- Clientes: aplicado o padrão visual executivo do Dashboard aos KPIs operacionais, cards, gráficos e tabela responsiva; mantidos filtros, drilldowns, dados reais e layout de impressão/PDF.
+- Dashboard (composição visual, etapa 3): gráfico principal de evolução acompanhado por painel de leitura executiva em telas amplas, KPIs clicáveis com dados existentes e acabamento consistente na grade analítica inferior; backlog identificado como fotografia atual.
+- Correção de propriedades duplicadas do tema MUI (TS1117) e documentação do carregamento inicial no Assistente de Análise; CI da correção aprovado.
+- Tema MUI centraliza estilos de tabelas (cabeçalhos fixos, números tabulares, hover, scroll contido) e chips por meio dos tokens semânticos.
+
+> Etapa visual incorporada à 2.1.0-rc.9. Consulte a seção acima para o escopo desta pré-release.
+
 ## 2.1.0-rc.8 — 2026-10-17
 
 ### Central da Coordenação e rastreabilidade

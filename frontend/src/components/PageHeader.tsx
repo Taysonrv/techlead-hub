@@ -26,30 +26,29 @@ export function PageHeader({
       sx={{
         justifyContent: "space-between",
         alignItems: { xs: "stretch", lg: "center" },
-        gap: { xs: 1.4, lg: 2 },
-        mb: { xs: 1.5, md: 2 },
+        gap: { xs: 1.2, sm: 1.4, lg: 2 },
+        minWidth: 0,
+        mb: { xs: 2, md: 2.75 },
         position: "relative",
         overflow: "hidden",
-        p: { xs: 1.45, sm: 1.65, md: 1.8 },
-        minHeight: { md: 102 },
+        p: { xs: 1.75, sm: 2.4, md: 3 },
+        minHeight: { xs: 0, md: 142 },
         width: "100%",
         maxWidth: "100%",
         boxSizing: "border-box",
-        borderRadius: "14px",
+        borderRadius: "var(--hub-radius-lg)",
         isolation: "isolate",
         border: "1px solid",
         borderColor: dark
           ? "rgba(76,190,230,.18)"
           : "rgba(15,118,110,.12)",
         backgroundColor: dark ? "#0C1E33" : "#F5F8FC",
-        boxShadow: dark
-          ? "0 14px 34px rgba(0,0,0,.15), inset 0 1px rgba(255,255,255,.03)"
-          : "0 7px 20px rgba(16,24,40,.035)",
+        boxShadow: "var(--hub-shadow-card)",
         "&::before": {
           content: '""',
           position: "absolute",
           inset: "0 auto 0 0",
-          width: 3,
+          width: 5,
           background:
             "linear-gradient(180deg, #18C77A 0%, #22D3EE 62%, transparent 100%)",
           opacity: dark ? 0.95 : 0.78,
@@ -101,12 +100,13 @@ export function PageHeader({
             fontWeight: 820,
             letterSpacing: "-.028em",
             fontSize: {
-              xs: "1.42rem",
-              sm: "1.6rem",
-              md: "1.78rem",
-              xl: "1.9rem",
+              xs: "clamp(1.4rem, 5.5vw, 1.75rem)",
+              sm: "2rem",
+              md: "2.3rem",
+              xl: "2.5rem",
             },
             lineHeight: 1.12,
+            overflowWrap: "anywhere",
           }}
         >
           {title}
@@ -116,8 +116,9 @@ export function PageHeader({
           variant="body2"
           color="text.secondary"
           sx={{
-            mt: 0.3,
+            mt: 0.75,
             maxWidth: 880,
+            overflowWrap: "anywhere",
             lineHeight: 1.48,
           }}
         >
@@ -146,7 +147,7 @@ export function PageHeader({
             flexShrink: 0,
             alignSelf: { xs: "stretch", lg: "center" },
             minWidth: 0,
-            maxWidth: { lg: "48%" },
+            maxWidth: { xs: "100%", lg: "48%" },
             p: 0,
             borderRadius: 0,
             border: 0,
@@ -154,7 +155,7 @@ export function PageHeader({
             background: "transparent",
             boxShadow: "none",
             backdropFilter: "none",
-            "& > *": { maxWidth: "100%" },
+            "& > *": { maxWidth: "100%", minWidth: 0 },
             "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
           }}
         >

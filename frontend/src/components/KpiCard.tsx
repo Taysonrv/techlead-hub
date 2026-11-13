@@ -10,8 +10,11 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import { InfoOutlined } from "@mui/icons-material";
-import type { KeyboardEvent, ReactNode } from "react";
+import { InfoOutlined, StarBorderRounded, StarRounded } from "@mui/icons-material";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { readFavorites, toggleFavorite } from "../utils/favorites";
 import { kpiLayout } from "../theme/layoutTokens";
 import { aliareColors } from "../theme/theme";
 
@@ -33,6 +36,8 @@ type KpiCardProps = {
   active?: boolean;
   density?: "default" | "compact";
   onClick?: () => void;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 };
 
 export function KpiCard({
@@ -48,7 +53,25 @@ export function KpiCard({
   active = false,
   density = "default",
   onClick,
+  favorite,
+  onToggleFavorite,
 }: KpiCardProps) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const favoriteId = "card:" + location.pathname + ":" + title;
+  const targetId = "favorite-card-" + encodeURIComponent(title);
+  const [autoFavorite, setAutoFavorite] = useState(false);
+  useEffect(() => {
+    const refresh = () => setAutoFavorite(user?.id != null && readFavorites(user.id).some((item) => item.id === favoriteId));
+    refresh();
+    window.addEventListener("techlead-favorites-changed", refresh);
+    return () => window.removeEventListener("techlead-favorites-changed", refresh);
+  }, [user?.id, favoriteId]);
+  const selectedFavorite = onToggleFavorite ? favorite : autoFavorite;
+  const handleFavorite = onToggleFavorite ?? (() => {
+    if (user?.id == null) return;
+    toggleFavorite(user.id, { id: favoriteId, label: title, path: location.pathname + "#" + targetId, kind: "card" });
+  });
   const theme = useTheme();
   const dark = theme.palette.mode === "dark";
 
@@ -63,6 +86,7 @@ export function KpiCard({
     <Card
       elevation={0}
       data-kpi-card
+      id={targetId}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       aria-pressed={onClick ? active : undefined}
@@ -75,26 +99,26 @@ export function KpiCard({
         width: "100%",
         minWidth: 0,
         height: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
+        "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { transform: "none" } },
         minHeight: density === "compact" ? { xs: 98, md: 104 } : kpiLayout.height,
         border: "1px solid",
-        borderColor: active ? accent : "divider",
+        borderColor: active ? accent : dark ? "rgba(117,171,190,.22)" : "rgba(15,23,42,.085)",
+        borderRadius: "18px",
         cursor: onClick ? "pointer" : "default",
         opacity: 1,
         background: dark
           ? `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.17)} 0%, ${alpha(accent, 0.075)} 24%, transparent 58%), linear-gradient(145deg, rgba(11,34,48,.98), rgba(7,25,38,.995))`
           : `radial-gradient(circle at 0% 50%, ${alpha(accent, 0.10)} 0%, ${alpha(accent, 0.04)} 28%, transparent 60%), linear-gradient(145deg, #FFFFFF, #FAFCFD)`,
         boxShadow: active
-          ? dark
-            ? "0 15px 34px rgba(0,0,0,.18)"
-            : "0 10px 26px rgba(15,23,42,.07)"
-          : "none",
+          ? dark ? "0 20px 42px rgba(0,0,0,.25)" : "0 16px 36px rgba(15,23,42,.11)"
+          : dark ? "0 12px 30px rgba(0,0,0,.13)" : "0 10px 28px rgba(15,23,42,.065)",
         transition:
           "transform .15s ease, box-shadow .15s ease, border-color .15s ease",
         "&::before": {
           content: '""',
           position: "absolute",
           inset: "0 auto 0 0",
-          width: 3,
+          width: 5,
           bgcolor: accent,
           opacity: active ? 1 : 0.82,
         },
@@ -148,9 +172,11 @@ export function KpiCard({
             sx={{
               fontWeight: 750,
               fontSize: kpiLayout.titleSize,
-              whiteSpace: "nowrap",
+              whiteSpace: "normal",
               overflow: "hidden",
-              textOverflow: "ellipsis",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
               letterSpacing: "-.004em",
               lineHeight: 1.3,
               minWidth: 0,
@@ -161,6 +187,7 @@ export function KpiCard({
           </Typography>
 
           <Stack direction="row" sx={{ flexShrink: 0, gap: 0.35 }}>
+          {user?.id != null && <Tooltip title={selectedFavorite ? "Remover dos favoritos" : "Favoritar card"}><IconButton size="small" aria-label={selectedFavorite ? "Remover dos favoritos" : "Favoritar card"} onClick={(event) => { event.stopPropagation(); handleFavorite(); }} sx={{ width: 24, height: 24, p: .25, color: selectedFavorite ? "#F5C451" : "text.secondary", "& .MuiSvgIcon-root": { fontSize: 17 } }}>{selectedFavorite ? <StarRounded /> : <StarBorderRounded />}</IconButton></Tooltip>}
           {icon ? <Box sx={{ display: "flex", color: accent, flexShrink: 0, "& .MuiSvgIcon-root": { fontSize: 18 } }}>{icon}</Box> : null}
           {infoContent ? <Box onClick={(event) => event.stopPropagation()} sx={{ flexShrink: 0, mt: -.25, "& .MuiIconButton-root": { width: 22, height: 22, p: .25 }, "& .MuiSvgIcon-root": { fontSize: 16 } }}>{infoContent}</Box> : info || metadata ? (
             <Tooltip
@@ -227,6 +254,7 @@ export function KpiCard({
               : kpiLayout.valueSize,
             lineHeight: 1,
             fontVariantNumeric: "tabular-nums",
+            fontFeatureSettings: "\"tnum\"",
           }}
         >
           {value}

@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma";
 import { Prisma } from "@prisma/client";
 import { dataProtectionService } from "./DataProtectionService";
+import { chatEventBus } from "./ChatEventBus";
 
 const memberUserSelect = { id: true, name: true, username: true, role: true, avatarUpdatedAt: true } as const;
 
@@ -43,6 +44,7 @@ export class ChatService {
     await this.assertMember(userId, channelId);
     if (!active) {
       await prisma.$executeRawUnsafe(`DELETE FROM "ChatTyping" WHERE "channelId"=$1 AND "userId"=$2`, channelId, userId);
+      await this.notifyChannel(channelId);
       return;
     }
     await prisma.$executeRawUnsafe(
@@ -50,6 +52,7 @@ export class ChatService {
        ON CONFLICT ("channelId","userId") DO UPDATE SET "expiresAt"=EXCLUDED."expiresAt"`,
       channelId, userId,
     );
+    await this.notifyChannel(channelId);
   }
 
   async realtimeSnapshot(userId: number) {
@@ -214,41 +217,174 @@ export class ChatService {
       where: { channelId, deletedAt: null, ...(beforeId ? { id: { lt: beforeId } } : {}) },
       orderBy: { id: "desc" },
       take: 100,
+      include: { author: { select: memberUserSelect }, attachment: { select: { name: true, mimeType: true, size: true } } },
+    });
+    return messages.reverse();
+  }
+
+  async searchMessages(userId: number, channelId: number, query: string) {
+    await this.assertMember(userId, channelId);
+    const term = query.trim();
+    if (term.length < 2 || term.length > 120) {
+      throw Object.assign(new Error("A pesquisa deve ter entre 2 e 120 caracteres."), { statusCode: 400 });
+    }
+    return prisma.chatMessage.findMany({
+      where: { channelId, deletedAt: null, content: { contains: term, mode: "insensitive" } },
+      orderBy: { id: "desc" },
+      take: 50,
       include: { author: { select: memberUserSelect } },
     });
-    await prisma.chatChannelMember.update({ where: { channelId_userId: { channelId, userId } }, data: { lastReadAt: new Date() } });
-    return messages.reverse();
   }
 
   async sendAttachment(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
-    const name = dataProtectionService.normalizeText(input.name, 180);
-    const mimeType = dataProtectionService.normalizeText(input.mimeType, 100) || "application/octet-stream";
+    const name = dataProtectionService.normalizeText(input.name, 180).replace(/[\\/:*?"<>|\r\n\x00-\x1f]/g, "_");
     const data = String(input.data ?? "");
-    if (!name || !data) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
-    const match = data.match(/^data:([^;]+);base64,(.+)$/);
-    if (!match) throw Object.assign(new Error("Formato do anexo inválido."), { statusCode: 400 });
-    const encoded = match[2];
-    if (!encoded) throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
+    const match = /^data:([^;]+);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+    const rawMimeType = match?.[1];
+    const encoded = match?.[2];
+    if (!name || !rawMimeType || !encoded) throw Object.assign(new Error("Anexo inválido."), { statusCode: 400 });
+    const mimeType = rawMimeType.toLowerCase();
+    const allowed = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv", "application/zip", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
+    if (!allowed.has(mimeType)) throw Object.assign(new Error("Tipo de anexo não permitido."), { statusCode: 400 });
+    if (encoded.length > Math.ceil(8 * 1024 * 1024 * 4 / 3) + 4) throw Object.assign(new Error("Anexo excede 8 MB."), { statusCode: 400 });
     const bytes = Buffer.from(encoded, "base64");
-    if (!bytes.length || bytes.length > 8 * 1024 * 1024) throw Object.assign(new Error("O anexo deve ter no máximo 8 MB."), { statusCode: 400 });
-    const blocked = ["application/x-msdownload", "application/x-msdos-program", "application/x-sh", "application/x-bat"];
-    if (blocked.includes(mimeType)) throw Object.assign(new Error("Este tipo de arquivo não é permitido."), { statusCode: 400 });
-    const safeName = name.replace(/[\\/:*?"<>|\r\n]/g, "_");
-    const content = `[anexo] ${safeName}|${mimeType}|${bytes.length}|${match[2]}`;
-    if (content.length > 12_000_000) throw Object.assign(new Error("Anexo excede o limite permitido."), { statusCode: 400 });
-    const message = await prisma.chatMessage.create({
-      data: { channelId, authorId: userId, content },
-      include: { author: { select: memberUserSelect } },
+    if (!bytes.length || bytes.length > 8 * 1024 * 1024 || bytes.toString("base64") !== encoded) {
+      throw Object.assign(new Error("Conteúdo do anexo inválido."), { statusCode: 400 });
+    }
+    const signatureOk = mimeType === "application/pdf" ? bytes.subarray(0, 5).toString() === "%PDF-" :
+      mimeType === "image/png" ? bytes.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex")) :
+      mimeType === "image/jpeg" ? bytes.subarray(0, 3).equals(Buffer.from("ffd8ff", "hex")) :
+      mimeType === "image/gif" ? ["GIF87a", "GIF89a"].includes(bytes.subarray(0, 6).toString()) :
+      mimeType === "image/webp" ? bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP" :
+      mimeType === "application/zip" || mimeType.startsWith("application/vnd.openxmlformats") ? bytes.subarray(0, 2).toString() === "PK" : true;
+    if (!signatureOk) throw Object.assign(new Error("O conteúdo não corresponde ao tipo de arquivo."), { statusCode: 400 });
+    const { createHash } = await import("node:crypto");
+    const hash = createHash("sha256").update(bytes).digest("hex");
+    const message = await prisma.$transaction(async (tx) => {
+      const created = await tx.chatMessage.create({
+        data: { channelId, authorId: userId, kind: "ATTACHMENT", content: `Anexo: ${name}` },
+        include: { author: { select: memberUserSelect } },
+      });
+      await tx.chatAttachment.create({
+        data: { channelId, messageId: created.id, name, mimeType, size: bytes.length, sha256: hash, data: bytes },
+      });
+      await tx.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
+      return created;
     });
-    await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
-    await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name: safeName, mimeType, size: bytes.length });
-    return message;
+    await this.audit(userId, "CHAT_ATTACHMENT_CREATED", "ChatMessage", message.id, { channelId, name, mimeType, size: bytes.length });
+    await this.notifyChannel(channelId);
+    return { ...message, attachment: { id: message.id, name, mimeType, size: bytes.length } };
+  }
+
+  async downloadAttachment(userId: number, channelId: number, messageId: number) {
+    await this.assertMember(userId, channelId);
+    const attachment = await prisma.chatAttachment.findFirst({
+      where: { channelId, messageId, message: { deletedAt: null } },
+    });
+    if (!attachment) throw Object.assign(new Error("Anexo não encontrado."), { statusCode: 404 });
+    return attachment;
+  }
+
+  async markRead(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    await prisma.chatChannelMember.update({
+      where: { channelId_userId: { channelId, userId } },
+      data: { lastReadAt: new Date() },
+    });
+    await this.notifyChannel(channelId);
+    return { ok: true };
+  }
+
+  async openContextChannel(userId: number, input: Record<string, unknown>) {
+    const contextType = String(input.contextType ?? "").toUpperCase();
+    if (!["TICKET", "TASK"].includes(contextType)) {
+      throw Object.assign(new Error("Tipo de contexto inválido."), { statusCode: 400 });
+    }
+    const contextId = dataProtectionService.normalizeText(input.contextId, 120);
+    if (!contextId || !/^[a-zA-Z0-9_-]{1,120}$/.test(contextId)) {
+      throw Object.assign(new Error("Identificador de contexto inválido."), { statusCode: 400 });
+    }
+    const numericId = Number(contextId);
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+      throw Object.assign(new Error("Identificador do registro inválido."), { statusCode: 400 });
+    }
+    const source = contextType === "TICKET"
+      ? await prisma.ticket.findUnique({ where: { movideskId: numericId }, select: { subject: true, client: true, isDeleted: true } })
+      : await prisma.azureWorkItem.findUnique({ where: { id: numericId }, select: { title: true, client: true } });
+    if (!source || ("isDeleted" in source && source.isDeleted)) {
+      throw Object.assign(new Error("Registro de origem não localizado."), { statusCode: 404 });
+    }
+    // Nome e cliente vêm da fonte persistida, nunca do texto enviado pelo navegador.
+    const title = dataProtectionService.normalizeText("subject" in source ? source.subject : source.title, 120);
+    const clientName = dataProtectionService.normalizeText(source.client, 160) || null;
+    // Inclusão de outros membros exige uma política de acesso por registro;
+    // até ela existir, a sala nasce restrita ao solicitante.
+    const requested = [userId];
+    const members = await prisma.user.findMany({
+      where: { id: { in: requested }, active: true, approvalStatus: "APPROVED" },
+      select: { id: true },
+    });
+    if (members.length !== requested.length) throw Object.assign(new Error("Há participantes não aprovados ou inativos."), { statusCode: 400 });
+    const channel = await prisma.$transaction(async (tx) => {
+      // Serializa a criação para impedir salas duplicadas em requisições simultâneas.
+      const lockKey = `chat-context:${contextType}:${contextId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const existing = await tx.chatChannel.findFirst({
+        where: { type: "CONTEXT", contextType, contextId, archivedAt: null },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
+      if (existing) {
+        if (!existing.members.some((member) => member.userId === userId)) {
+          // Não revela nem adiciona membros a uma sala já existente sem autorização.
+          throw Object.assign(new Error("Sala existente. Solicite acesso à coordenação."), { statusCode: 403 });
+        }
+        return existing;
+      }
+      const created = await tx.chatChannel.create({
+        data: {
+          name: title || `${contextType} #${contextId}`,
+          type: "CONTEXT",
+          description: `Sala de acompanhamento de ${contextType.toLowerCase()}`,
+          contextType, contextId, clientName,
+          members: { create: requested.map((memberId) => ({ userId: memberId })) },
+        },
+        include: { members: { include: { user: { select: memberUserSelect } } } },
+      });
+      await tx.chatMessage.create({
+        data: {
+          channelId: created.id, authorId: userId, kind: "SYSTEM",
+          content: `Sala criada para ${contextType} #${contextId}. Registre decisões e próximos passos neste canal.`,
+          payload: { contextType, contextId },
+        },
+      });
+      return created;
+    });
+    await this.audit(userId, "CHAT_CONTEXT_OPENED", "ChatChannel", channel.id, { contextType, contextId });
+    await this.notifyChannel(channel.id);
+    return channel;
   }
 
   async sendMessage(userId: number, channelId: number, input: Record<string, unknown>) {
     await this.assertMember(userId, channelId);
     const content = dataProtectionService.normalizeText(input.content);
+    const requestedKind = String(input.kind ?? "TEXT").toUpperCase();
+    const kind = ["TEXT", "RECORD_CARD", "SYSTEM"].includes(requestedKind) ? requestedKind : "TEXT";
+    if (kind === "SYSTEM") throw Object.assign(new Error("Mensagens de sistema são reservadas ao servidor."), { statusCode: 403 });
+    const clientMessageId = typeof input.clientMessageId === "string" && /^[a-zA-Z0-9_-]{8,80}$/.test(input.clientMessageId)
+      ? input.clientMessageId : null;
+    if (clientMessageId) {
+      const previous = await prisma.chatMessage.findUnique({
+        where: { channelId_authorId_clientMessageId: { channelId, authorId: userId, clientMessageId } },
+        include: { author: { select: memberUserSelect } },
+      });
+      if (previous) return { ...previous, mentions: [] };
+    }
+    const payload = kind === "RECORD_CARD" && input.payload && typeof input.payload === "object" && !Array.isArray(input.payload)
+      ? input.payload as Record<string, unknown> : null;
+    if (kind === "RECORD_CARD" && (!payload || !["ticket", "task"].includes(String(payload.type ?? "").toLowerCase()))) {
+      throw Object.assign(new Error("Card de registro inválido."), { statusCode: 400 });
+    }
     if (!content) throw Object.assign(new Error("A mensagem não pode ficar vazia."), { statusCode: 400 });
     dataProtectionService.assertNoSecrets(content);
     const parentId = Number(input.parentId) || null;
@@ -257,7 +393,7 @@ export class ChatService {
       if (!parent) throw Object.assign(new Error("Mensagem respondida não foi localizada."), { statusCode: 404 });
     }
     const message = await prisma.chatMessage.create({
-      data: { channelId, authorId: userId, parentId, content },
+      data: { channelId, authorId: userId, parentId, content, kind, payload: payload as Prisma.InputJsonValue | undefined ?? undefined, clientMessageId },
       include: { author: { select: memberUserSelect } },
     });
     await prisma.chatChannel.update({ where: { id: channelId }, data: { updatedAt: new Date() } });
@@ -281,6 +417,7 @@ export class ChatService {
       length: content.length,
       mentionCount: mentions.length,
     });
+    await this.notifyChannel(channelId);
     return { ...message, mentions };
   }
 
@@ -371,6 +508,162 @@ export class ChatService {
     if (message.authorId !== userId && role === "ANALISTA") throw Object.assign(new Error("Você não pode remover esta mensagem."), { statusCode: 403 });
     await prisma.chatMessage.update({ where: { id: messageId }, data: { content: "[mensagem removida]", deletedAt: new Date() } });
     await this.audit(userId, "CHAT_MESSAGE_DELETED", "ChatMessage", messageId, { channelId: message.channelId });
+  }
+
+  async incidentContext(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    const channel = await prisma.chatChannel.findUnique({
+      where: { id: channelId },
+      select: { type: true, contextType: true, contextId: true },
+    });
+    if (!channel || channel.type !== "CONTEXT") {
+      throw Object.assign(new Error("Sala de incidente não localizada."), { statusCode: 404 });
+    }
+    const externalId = Number(channel.contextId);
+    if (!Number.isSafeInteger(externalId) || externalId <= 0) {
+      return { source: "UNAVAILABLE", record: null, linked: null, syncedAt: null };
+    }
+    const kind = (channel.contextType ?? "").toUpperCase();
+    if (kind === "TICKET" || kind === "MOVIDESK") {
+      const ticket = await prisma.ticket.findUnique({
+        where: { movideskId: externalId },
+        select: {
+          movideskId: true, subject: true, status: true, urgency: true,
+          client: true, owner: true, ownerTeam: true, dueDate: true,
+          solutionSlaIndicator: true, responseSlaIndicator: true,
+          taskNumber: true, lastUpdate: true, importedAt: true,
+        },
+      });
+      const linked = ticket?.taskNumber ? await prisma.azureWorkItem.findUnique({
+        where: { id: ticket.taskNumber },
+        select: { id: true, title: true, state: true, workItemType: true, assignedToName: true, criticality: true, syncedAt: true },
+      }) : null;
+      return { source: "MOVIDESK", record: ticket, linked, syncedAt: ticket?.importedAt ?? null };
+    }
+    if (kind === "AZURE" || kind === "TASK" || kind === "WORK_ITEM") {
+      const task = await prisma.azureWorkItem.findUnique({
+        where: { id: externalId },
+        select: {
+          id: true, title: true, state: true, workItemType: true,
+          assignedToName: true, client: true, criticality: true,
+          slaLimit: true, movideskTicket: true, syncedAt: true,
+        },
+      });
+      const linked = task?.movideskTicket ? await prisma.ticket.findUnique({
+        where: { movideskId: task.movideskTicket },
+        select: { movideskId: true, subject: true, status: true, urgency: true, owner: true, importedAt: true },
+      }) : null;
+      return { source: "AZURE", record: task, linked, syncedAt: task?.syncedAt ?? null };
+    }
+    return { source: "UNAVAILABLE", record: null, linked: null, syncedAt: null };
+  }
+
+  async listIncidentActions(userId: number, channelId: number) {
+    await this.assertMember(userId, channelId);
+    return prisma.chatIncidentAction.findMany({
+      where: { channelId },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      take: 100,
+      include: {
+        author: { select: memberUserSelect },
+        assignee: { select: memberUserSelect },
+      },
+    });
+  }
+
+  async createIncidentAction(userId: number, channelId: number, input: Record<string, unknown>) {
+    await this.assertMember(userId, channelId);
+    const channel = await prisma.chatChannel.findUnique({ where: { id: channelId }, select: { type: true, archivedAt: true } });
+    if (!channel || channel.archivedAt || channel.type !== "CONTEXT") {
+      throw Object.assign(new Error("Ações operacionais exigem uma sala de incidente ativa."), { statusCode: 400 });
+    }
+    const kind = String(input.kind ?? "").toUpperCase();
+    if (!["DECISION", "ESCALATION", "HANDOFF", "ACTION"].includes(kind)) {
+      throw Object.assign(new Error("Tipo de ação inválido."), { statusCode: 400 });
+    }
+    const title = dataProtectionService.normalizeText(input.title, 200);
+    const details = dataProtectionService.normalizeText(input.details, 2000);
+    if (title.length < 4) throw Object.assign(new Error("Descreva a ação em ao menos 4 caracteres."), { statusCode: 400 });
+    const assigneeId = input.assigneeId == null ? null : Number(input.assigneeId);
+    if (assigneeId !== null) {
+      if (!Number.isSafeInteger(assigneeId) || assigneeId <= 0) {
+        throw Object.assign(new Error("Responsável inválido."), { statusCode: 400 });
+      }
+      await this.assertMember(assigneeId, channelId);
+    }
+    const dueAt = typeof input.dueAt === "string" && input.dueAt ? new Date(input.dueAt) : null;
+    if (dueAt && !Number.isFinite(dueAt.getTime())) {
+      throw Object.assign(new Error("Prazo inválido."), { statusCode: 400 });
+    }
+    const action = await prisma.chatIncidentAction.create({
+      data: { channelId, authorId: userId, kind, title, details: details || null, assigneeId, dueAt },
+      include: { author: { select: memberUserSelect }, assignee: { select: memberUserSelect } },
+    });
+    await this.audit(userId, "CHAT_INCIDENT_ACTION_CREATED", "ChatIncidentAction", action.id, { channelId, kind });
+    await this.notifyChannel(channelId);
+    return action;
+  }
+
+  async updateIncidentAction(userId: number, channelId: number, actionId: number, input: Record<string, unknown>) {
+    await this.assertMember(userId, channelId);
+    const current = await prisma.chatIncidentAction.findFirst({ where: { id: actionId, channelId } });
+    if (!current) throw Object.assign(new Error("Ação não localizada."), { statusCode: 404 });
+    if (current.authorId !== userId && current.assigneeId !== userId) {
+      throw Object.assign(new Error("Somente autor ou responsável pode atualizar a ação."), { statusCode: 403 });
+    }
+    const status = String(input.status ?? "").toUpperCase();
+    if (!["OPEN", "IN_PROGRESS", "DONE", "CANCELLED"].includes(status)) {
+      throw Object.assign(new Error("Situação inválida."), { statusCode: 400 });
+    }
+    const action = await prisma.chatIncidentAction.update({
+      where: { id: actionId },
+      data: { status, closedAt: ["DONE", "CANCELLED"].includes(status) ? new Date() : null },
+      include: { author: { select: memberUserSelect }, assignee: { select: memberUserSelect } },
+    });
+    await this.audit(userId, "CHAT_INCIDENT_ACTION_UPDATED", "ChatIncidentAction", action.id, { channelId, status });
+    await this.notifyChannel(channelId);
+    return action;
+  }
+
+  async deliveryCursor(userId: number) {
+    const latest = await prisma.chatDeliveryEvent.findFirst({
+      where: { userId },
+      orderBy: { id: "desc" },
+      select: { id: true },
+    });
+    return latest?.id.toString() ?? "0";
+  }
+
+  async deliveryChangesSince(userId: number, cursor: string) {
+    if (!/^\\d{1,20}$/.test(cursor)) {
+      throw Object.assign(new Error("Cursor de eventos inválido."), { statusCode: 400 });
+    }
+    const since = BigInt(cursor);
+    const changes = await prisma.chatDeliveryEvent.findMany({
+      where: { userId, id: { gt: since } },
+      orderBy: { id: "asc" },
+      take: 100,
+      select: { id: true, channelId: true },
+    });
+    const candidateIds = [...new Set(changes.map((item) => item.channelId).filter((id): id is number => id !== null))];
+    const authorized = candidateIds.length ? await prisma.chatChannelMember.findMany({
+      where: { userId, channelId: { in: candidateIds }, channel: { archivedAt: null } },
+      select: { channelId: true },
+    }) : [];
+    return {
+      cursor: changes.at(-1)?.id.toString() ?? (since === 0n ? await this.deliveryCursor(userId) : cursor),
+      changedChannelIds: authorized.map((item) => item.channelId),
+      hasMore: changes.length === 100,
+      changed: changes.length > 0,
+    };
+  }
+
+  private async notifyChannel(channelId: number) {
+    const members = await prisma.chatChannelMember.findMany({ where: { channelId }, select: { userId: true } });
+    if (members.length) {
+      await prisma.chatDeliveryEvent.createMany({ data: members.map((member) => ({ userId: member.userId, channelId })) });
+      chatEventBus.publish(members.map((member) => member.userId));
+    }
   }
 
   private async assertMember(userId: number, channelId: number) {

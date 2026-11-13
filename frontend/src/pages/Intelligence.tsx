@@ -1,6 +1,6 @@
 import { KpiGrid } from "../components/KpiGrid";
 import { KpiCard as ExecutiveKpiCard } from "../components/KpiCard";
-import { useEffect,useState } from "react";
+import { useEffect,useRef,useState } from "react";
 import type { ReactNode } from "react";
 import { Alert,Box,Button,Card,CardContent,Chip,LinearProgress,MenuItem,Stack,TextField,Tooltip,Typography,useTheme } from "@mui/material";
 import { AutoGraphOutlined,HubOutlined,PsychologyOutlined,SearchOutlined,TrendingUpOutlined } from "@mui/icons-material";
@@ -9,6 +9,7 @@ import { useNavigate } from "react-router-dom";
 import { api,getApiErrorMessage } from "../services/api";
 import { PageHeader } from "../components/PageHeader";
 import { aliareColors } from "../theme/theme";
+import { useVisiblePolling } from "../hooks/useVisiblePolling";
 
 type Data={
   generatedAt:string;periodDays:number;scope:{name:string;description:string};
@@ -24,13 +25,16 @@ type Data={
 
 export function Intelligence(){
   const navigate=useNavigate(),theme=useTheme();
-  const [days,setDays]=useState(90),[data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState("");
-  useEffect(()=>{const controller=new AbortController();setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days},signal:controller.signal}).then(r=>{if(!controller.signal.aborted)setData(r.data)}).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days]);
+  const [period,setPeriod]=useState("month"),[data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[refreshVersion,setRefreshVersion]=useState(0);
+  const loadedOnce=useRef(false);
+  const days=period==="month"?30:Number(period);
+  useVisiblePolling(()=>setRefreshVersion((value)=>value+1),120_000);
+  useEffect(()=>{const controller=new AbortController();if(!loadedOnce.current)setLoading(true);setError("");api.get<Data>("/intelligence/overview",{params:{days,period:period==="month"?period:undefined},signal:controller.signal}).then(r=>{if(!controller.signal.aborted){loadedOnce.current=true;setData(r.data)}}).catch(e=>{if(!controller.signal.aborted)setError(getApiErrorMessage(e,"Não foi possível carregar a inteligência operacional."));}).finally(()=>{if(!controller.signal.aborted)setLoading(false)});return()=>controller.abort();},[days,period,refreshVersion]);
   const panel={border:"1px solid",borderColor:"divider",borderRadius:3,background:theme.palette.mode==="dark"?"linear-gradient(145deg,rgba(12,31,55,.96),rgba(8,22,40,.98))":"linear-gradient(145deg,#fff,#f8fbff)",boxShadow:theme.palette.mode==="dark"?"0 18px 44px rgba(0,0,0,.18)":"0 14px 34px rgba(30,64,175,.06)"} as const;
   const openInvestigation=(q:string)=>navigate(`/investigacao?q=${encodeURIComponent(q)}`);
   return <Box sx={{pb:4}}>
     <PageHeader eyebrow="Inteligência 2.1" title="Central de Inteligência" description="Correlação, recorrência e sinais operacionais para transformar dados do suporte em evidências acionáveis." meta={data?`${data.periodDays} dias · atualizado ${new Date(data.generatedAt).toLocaleString("pt-BR")}`:undefined}/>
-    <Stack direction={{xs:"column",sm:"row"}} spacing={1.5} sx={{mb:2,alignItems:{sm:"center"}}}><Chip label={data?data.scope.name:"Carteira SIMER"} color="success" variant="outlined" sx={{fontWeight:800}}/><TextField select size="small" label="Período" value={days} onChange={e=>setDays(Number(e.target.value))} sx={{minWidth:190}}><MenuItem value={30}>30 dias</MenuItem><MenuItem value={90}>90 dias</MenuItem><MenuItem value={180}>6 meses</MenuItem><MenuItem value={365}>12 meses</MenuItem></TextField><Button startIcon={<SearchOutlined/>} onClick={()=>navigate("/investigacao")} variant="outlined">Investigar assunto</Button><Button startIcon={<PsychologyOutlined/>} onClick={()=>navigate("/problemas-conhecidos")} variant="outlined">Problemas conhecidos</Button></Stack>
+    <Stack direction={{xs:"column",sm:"row"}} spacing={1.5} sx={{mb:2,alignItems:{sm:"center"}}}><Chip label={data?data.scope.name:"Carteira SIMER"} color="success" variant="outlined" sx={{fontWeight:800}}/><TextField select size="small" label="Período" value={period} onChange={e=>setPeriod(String(e.target.value))} sx={{minWidth:190}}><MenuItem value="month">Este mês</MenuItem><MenuItem value="30">30 dias</MenuItem><MenuItem value="90">90 dias</MenuItem><MenuItem value="180">6 meses</MenuItem><MenuItem value="365">12 meses</MenuItem></TextField><Button startIcon={<SearchOutlined/>} onClick={()=>navigate("/investigacao")} variant="outlined">Investigar assunto</Button><Button startIcon={<PsychologyOutlined/>} onClick={()=>navigate("/problemas-conhecidos")} variant="outlined">Problemas conhecidos</Button></Stack>
     {loading&&<LinearProgress sx={{mb:2}}/>}{error&&<Alert severity="error" sx={{mb:2}}>{error}</Alert>}
     {data&&<><KpiGrid sx={{mb:2}}>
       <Metric title="Tickets analisados" value={data.summary.tickets} detail="Base do período" icon={<HubOutlined/>}/>
@@ -41,7 +45,7 @@ export function Intelligence(){
     </KpiGrid>
     {data.signals.length>0&&<Card elevation={0} sx={{...panel,mb:2,borderColor:"rgba(245,158,11,.28)"}}><CardContent><Typography sx={{fontWeight:850,fontSize:"1.05rem",mb:1.5}}>Radar de sinais</Typography><Stack spacing={1}>{data.signals.map((s,i)=><Button key={i} onClick={()=>s.query?openInvestigation(s.query):s.path?navigate(s.path):undefined} sx={{justifyContent:"flex-start",textAlign:"left",textTransform:"none",p:1.25,borderRadius:2,color:"text.primary","&:hover":{bgcolor:"action.hover"}}}><Box><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Chip size="small" label={s.severity==="high"?"Prioridade":"Atenção"} color={s.severity==="high"?"error":"warning"}/><Typography sx={{fontWeight:800}}>{s.title}</Typography></Stack><Typography variant="body2" color="text.secondary" sx={{mt:.5}}>{s.detail}</Typography></Box></Button>)}</Stack></CardContent></Card>}
     <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1.05fr .95fr"},gap:2,mb:2}}>
-      <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Evolução da demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Volume mensal dentro do recorte selecionado.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trends.monthly}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="month"/><YAxis allowDecimals={false}/><ChartTooltip/><Line type="monotone" dataKey="total" stroke={aliareColors.green} strokeWidth={3} dot={{r:3}}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
+      <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Evolução da demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Volume mensal dentro do recorte selecionado.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><LineChart data={data.trends.monthly}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="month"/><YAxis allowDecimals={false}/><ChartTooltip/><Line type="linear" dataKey="total" stroke={aliareColors.green} strokeWidth={3} dot={{r:3}}/></LineChart></ResponsiveContainer></Box></CardContent></Card>
       <Card elevation={0} sx={panel}><CardContent><Typography sx={{fontWeight:850}}>Serviços com maior demanda</Typography><Typography variant="body2" color="text.secondary" sx={{mb:2}}>Clique no gráfico para aprofundar pela Central de Investigação.</Typography><Box sx={{height:290}}><ResponsiveContainer width="100%" height="100%"><BarChart data={data.trends.services.slice(0,7)} layout="vertical" margin={{left:20}}><CartesianGrid strokeDasharray="3 3" horizontal={false}/><XAxis type="number" allowDecimals={false}/><YAxis type="category" dataKey="name" width={130} tick={{fontSize:11}}/><ChartTooltip/><Bar dataKey="total" fill={aliareColors.info} radius={[0,7,7,0]} onClick={(row:any)=>row?.name&&openInvestigation(row.name)}/></BarChart></ResponsiveContainer></Box></CardContent></Card>
     </Box>
     <Card elevation={0} sx={{...panel,mb:2,overflow:"hidden"}}><CardContent>

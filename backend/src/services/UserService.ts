@@ -1,4 +1,6 @@
 import { prisma } from "../database/prisma";
+import { Prisma } from "@prisma/client";
+import { ticketOperationalScope } from "../domain/OperationalScope";
 import { AuthError } from "./AuthService";
 
 /* =========================================================
@@ -11,6 +13,8 @@ const USER_ADMIN_SELECT = {
   username: true,
   email: true,
   role: true,
+  jobFunction: true,
+  movideskOwnerName: true,
   permissions: true,
   active: true,
   approvalStatus: true,
@@ -95,6 +99,76 @@ export class UserService {
     return prisma.user.update({
       where: { id: targetUserId },
       data: { permissions: normalized },
+      select: USER_ADMIN_SELECT,
+    });
+  }
+
+  async ticketOwnershipByFunction(adminUserId: number) {
+    await this.ensureAdmin(adminUserId);
+    const [users, owners] = await Promise.all([
+      prisma.user.findMany({ where: { active: true, approvalStatus: "APPROVED" }, select: { id: true, name: true, jobFunction: true, movideskOwnerName: true } }),
+      prisma.ticket.groupBy({ by: ["owner"], where: { AND: [ticketOperationalScope(), { isDeleted: false }] }, _count: { _all: true } }),
+    ]);
+    const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+    const byOwner = new Map(users.filter(user => user.movideskOwnerName).map(user => [normalize(user.movideskOwnerName!), user]));
+    const byFunction = new Map<string, { function: string; tickets: number; owners: number }>();
+    const unmatched: { owner: string; tickets: number }[] = [];
+    for (const item of owners) {
+      if (!item.owner?.trim()) continue;
+      const owner = byOwner.get(normalize(item.owner));
+      if (!owner) { unmatched.push({ owner: item.owner, tickets: item._count._all }); continue; }
+      const key = owner.jobFunction || "SEM_FUNCAO";
+      const row = byFunction.get(key) || { function: key, tickets: 0, owners: 0 };
+      row.tickets += item._count._all;
+      byFunction.set(key, row);
+    }
+    for (const user of users) if (user.movideskOwnerName) {
+      const key = user.jobFunction || "SEM_FUNCAO";
+      const row = byFunction.get(key) || { function: key, tickets: 0, owners: 0 };
+      row.owners++;
+      byFunction.set(key, row);
+    }
+    return {
+      byFunction: [...byFunction.values()].sort((a,b) => b.tickets-a.tickets),
+      unmatched: unmatched.sort((a,b) => b.tickets-a.tickets).slice(0,30),
+      linkedUsers: users.filter(user => user.movideskOwnerName).length,
+      totalUsers: users.length,
+      note: "Contagem por responsável atual do Movidesk, dentro do escopo operacional SIMER; não representa autoria ou histórico de atribuições.",
+    };
+  }
+
+  async updateMovideskOwnerName(adminUserId: number, targetUserId: number, value: unknown) {
+    await this.ensureAdmin(adminUserId);
+    await this.getTargetUser(targetUserId);
+    if (value !== null && (typeof value !== "string" || value.trim().length > 200)) {
+      throw new AuthError("Responsável Movidesk inválido (máximo 200 caracteres).", 400);
+    }
+    const name = typeof value === "string" ? value.trim() : "";
+    if (name) {
+      const existing = await prisma.user.findFirst({
+        where: { movideskOwnerName: { equals: name, mode: "insensitive" }, id: { not: targetUserId } },
+        select: { id: true },
+      });
+      if (existing) throw new AuthError("Este responsável Movidesk já está vinculado a outro usuário.", 409);
+    }
+    return prisma.user.update({
+      where: { id: targetUserId },
+      data: { movideskOwnerName: name || null },
+      select: USER_ADMIN_SELECT,
+    });
+  }
+
+  /** Função organizacional, separada de perfil e permissões. */
+  async updateUserJobFunction(adminUserId: number, targetUserId: number, value: unknown) {
+    await this.ensureAdmin(adminUserId);
+    await this.getTargetUser(targetUserId);
+    const allowed = ["COORDENADOR", "LIDER", "SUPORTE_SIMER_N1", "SUPORTE_SIMER_N2", "SUPORTE_SIMER_N3", "BANCO_DE_DADOS"] as const;
+    if (value !== null && (typeof value !== "string" || !allowed.includes(value as typeof allowed[number]))) {
+      throw new AuthError("Função inválida. Selecione uma das funções disponíveis.", 400);
+    }
+    return prisma.user.update({
+      where: { id: targetUserId },
+      data: { jobFunction: value as string | null },
       select: USER_ADMIN_SELECT,
     });
   }
@@ -485,11 +559,9 @@ export class UserService {
         id: targetUserId,
       },
       data: {
-        role:
-          role as
-            | "ADMIN"
-            | "COORDENADOR"
-            | "ANALISTA",
+        role: role as "ADMIN" | "COORDENADOR" | "ANALISTA",
+        // Não herdar permissões específicas do perfil anterior ao trocar de função.
+        permissions: role === "ADMIN" ? [] : Prisma.DbNull,
       },
       select: USER_ADMIN_SELECT,
     });

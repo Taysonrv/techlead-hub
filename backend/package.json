@@ -14,6 +14,10 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "chat:events:prune": "tsx scripts/prune-chat-delivery-events.ts",
+    "metrics:reconcile": "tsx scripts/reconcile-movidesk-export.ts",
+    "movidesk:reconcile-ids": "tsx scripts/reconcile-movidesk-ids.ts",
+    "movidesk:check-auth": "tsx scripts/check-movidesk-auth.ts",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "config:key-migrate": "tsx scripts/migrate-config-key.ts",
     "config:inspect-metadata": "tsx scripts/inspect-settings-metadata.ts"
@@ -29,7 +33,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@prisma/client": "^6.16.3",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "axios": "^1.20.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -37,7 +42,8 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.4.0"
+    "multer": "^2.4.0",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -45,7 +51,8 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.1.2",
-    "prisma": "^6.16.3",
+    "@types/pg": "^8.23.1",
+    "prisma": "^7.10.1",
     "tsx": "^4.23.1",
     "typescript": "^5.9.2"
   },

@@ -41,6 +41,7 @@ export type AuthUser = {
   email: string | null;
 
   role: UserRole;
+  jobFunction?: string | null;
   permissions?: string[] | null;
 
   active: boolean;

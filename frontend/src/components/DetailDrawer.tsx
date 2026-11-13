@@ -1,3 +1,4 @@
+import { detailDrawerPaperSx } from "../theme/layoutTokens";
 import type { ReactNode } from "react";
 import CloseOutlined from "@mui/icons-material/CloseOutlined";
 import { Box, Drawer, IconButton, Stack, Typography } from "@mui/material";
@@ -21,12 +22,10 @@ export function DetailDrawer({ open, onClose, title, subtitle, children, actions
       slotProps={{
         paper: {
           sx: {
-            width: { xs: "100vw", sm: "min(92vw, 620px)", lg: `min(46vw, ${width}px)` },
-            maxWidth: "100vw",
-            bgcolor: "background.paper",
-            overflowX: "hidden",
-            overscrollBehavior: "contain",
-            scrollbarGutter: "stable",
+            ...detailDrawerPaperSx,
+            width: { xs: "100vw", sm: "min(92vw, 640px)", lg: `min(52vw, ${width}px)` },
+            display: "flex",
+            flexDirection: "column",
           },
         },
       }}

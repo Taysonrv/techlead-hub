@@ -24,7 +24,7 @@ O filtro de clientes é parte do escopo operacional e não deve ser ampliado sem
 O ticket 815483 apareceu em diagnóstico anterior como caso suspeito, mas não há evidência neste repositório que confirme ser o atendimento atual ou explique sua ausência.
 
 ## Arquitetura de alertas
-1. Após persistir um ticket realmente novo, normalizar o assunto (Unicode NFD, remoção de diacríticos e caixa) e verificar os termos configurados: `AGRIQ`, `receituário`, `receita`.
+1. Após persistir um ticket realmente novo, normalizar o assunto (Unicode NFD, remoção de diacríticos e caixa) e verificar os termos configurados: `AGRIQ`, `receituário`, `receita avulsa` ou `receita agronômica`. O termo legado genérico `receita` é tratado como essas duas famílias, nunca como correspondência isolada.
 2. Registrar o evento em uma fila persistente, com chave única por ID Movidesk e tipo de evento. Atualizações de ticket existente não geram alerta de novo atendimento.
 3. Um worker independente envia o evento por HTTP POST ao webhook do Microsoft Teams Workflows e atualiza o estado da fila.
 4. O evento e o ticket devem ser gravados de forma atômica, para não criar ticket novo sem registrar seu alerta.
@@ -86,15 +86,16 @@ Este JSON de cartão ilustrativo é o corpo do POST. Substituir os valores de ex
 
 O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produção. Validar a URL final e o comportamento do Workflow em chat de homologação antes da ativação.
 
-## Configuração proposta
+## Configuração
 - `TEAMS_ALERTS_ENABLED=false` por padrão.
 - `TEAMS_WORKFLOW_WEBHOOK_URL` armazenada apenas em configuração protegida.
 - `TEAMS_TICKET_BASE_URL` para montar o link direto do atendimento.
-- `TEAMS_ALERT_TERMS=AGRIQ;receituário;receita`.
+- `TEAMS_ALERT_TERMS=AGRIQ;receituário;receita avulsa;receita agronômica`.
+- Se a configuração existente ainda contiver `receita`, o matcher restringe esse termo a `receita avulsa`/`receita agronômica`; títulos fiscais como `Código de receita Impostos` não geram alerta.
 - Timeout HTTP configurável e limitado; tamanho serializado validado antes do envio (máximo 256 KB).
 
-## Testes obrigatórios
-- Matching: AGRIQ em diferentes caixas; receituário com/sem acento; receita; texto vazio e falsos positivos.
+## Cobertura e homologação
+- Matching: AGRIQ em diferentes caixas; receituário com/sem acento; receita avulsa e agronômica; texto vazio; rejeitar `Código de receita Impostos` e outros falsos positivos fiscais.
 - Deduplicação: reimportar o mesmo ticket gera um único evento; ticket existente atualizado não dispara alerta de novo.
 - Atomicidade: falha ao persistir evento não deve deixar ticket novo sem sinalização silenciosa.
 - Worker: sucesso, timeout, HTTP 429/Retry-After, HTTP 5xx, reinício com pendências e duas instâncias concorrentes.
@@ -102,10 +103,10 @@ O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produ�
 - Contrato: POST com o Adaptive Card diretamente no body, usando o modelo e autenticação configurados no Workflow; publicar em chat de homologação.
 - Regressão: escopo SIMER e baseline manual permanecem inalterados; testes atuais passam.
 
-## Critérios de aceite
+## Critérios operacionais
 - Medir latência de sincronização e de alerta.
 - Falhas de envio permanecem persistidas e são retentadas sem bloquear a sincronização principal.
-- Métricas de idade da fila, tentativas, entregues, falhas e HTTP 429.
+- O worker registra duração e resultado HTTP no sucesso; registrar idade da fila, volume pendente, tentativas, itens `DEAD` e respostas HTTP 429 continua sendo requisito de observabilidade.
 - Nenhuma migração ou ativação em produção sem revisão, backup/plano de rollback e autorização explícita.
 
 
@@ -116,5 +117,17 @@ O cartão acima é ilustrativo. Não usar o domínio `example.invalid` em produ�
 - O worker processa um evento por ciclo, separado do scheduler de sincronização. A falha no Teams não interrompe a importação do Movidesk.
 - A configuração está desligada por padrão (`TEAMS_ALERTS_ENABLED=false`). O modelo de variáveis de ambiente está em `backend/.env.teams.example`; copie somente as variáveis necessárias para o `.env` local ignorado pelo Git.
 - Não ativar até confirmar a URL-base real do ticket no Movidesk e testar o formato do Adaptive Card com um chat de homologação.
-- A migration `20261022120000_movidesk_teams_alert_outbox` é parte da branch e ainda não deve ser aplicada a uma base de produção. Validar primeiro em banco local/homologação e manter plano de rollback. Aplicar a migração em ambiente autorizado antes de configurar `TEAMS_ALERTS_ENABLED=true`; com a flag ativada e a tabela ausente, a transação de importação de um ticket correspondente será revertida para preservar a atomicidade.
-- Antes de publicar, rodar `npm run prisma:generate`, `npm test` e `npm run build` na pasta `backend`; testar Desktop e Web com o mesmo backend/configuração, sem incluir o segredo no pacote do frontend.
+- A migration `20261022120000_movidesk_teams_alert_outbox` faz parte do código e é aplicada pelo fluxo normal de migration de deploy. A flag permanece desligada por padrão; só habilitar em ambiente com migration aplicada, webhook HTTPS e URL-base verificadas e envio validado em chat de homologação.
+- O CI do repositório executa a suíte de backend, builds e validações de integração. Antes da primeira ativação em cada ambiente, validar especificamente envio, timeout, retry/Retry-After, recuperação após reinício e concorrência de duas instâncias.
+- Nunca incluir URL do webhook em documentação, logs, tickets ou pacote do frontend.
+
+## Processos adicionais independentes
+
+Os avisos existentes de AgriQ continuam usando `TEAMS_ALERTS_ENABLED`, `TEAMS_WORKFLOW_WEBHOOK_URL` e `TEAMS_ALERT_TERMS`. Os processos abaixo usam uma fila persistente separada, URLs próprias e controles independentes na tela Configurações; as URLs são criptografadas na tabela `SystemSetting` e nunca retornadas ao frontend.
+
+- Ticket: somente primeira inserção no Hub, status Movidesk Novo e carteira operacional `ticketOperationalScope()` (cliente SIMER, serviço SIMER, responsável da carteira e data dentro do escopo); não usa `TEAMS_ALERT_TERMS`.
+- Task criada: Work Item criado por Tayson Alves de Araujo, Renan Breno Carvalho ou Alan Kardek, com número Movidesk vinculado.
+- Task retornando a Registro: mudança de estado observada para Registro, para os mesmos criadores e com ticket vinculado. Cada revisão Azure gera chave idempotente própria; reentradas posteriores podem notificar novamente.
+- A fila retém o snapshot do evento, processa tentativas com backoff, evita duplicidade por chave do evento e não processa eventos enquanto o respectivo fluxo estiver desligado.
+- As variáveis `TEAMS_SUPPORT_NEW_TICKETS_*`, `TEAMS_AZURE_TASK_CREATED_*` e `TEAMS_AZURE_TASK_REGISTRO_*` ficam desligadas por padrão. Elas podem fornecer valores iniciais; as configurações administrativas persistidas têm precedência. O backend precisa de `TEAMS_TICKET_BASE_URL` HTTPS para construir links de ticket.
+- O retorno a Registro é baseado nas transições observadas pelo sincronizador incremental do Azure; uma saída e retorno ocorridos inteiramente entre sincronizações podem não ser detectados sem Azure Service Hooks ou consulta do histórico de revisões.

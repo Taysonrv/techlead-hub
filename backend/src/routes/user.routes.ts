@@ -39,6 +39,11 @@ userRoutes.get(
 );
 
 userRoutes.get(
+  "/ticket-ownership-by-function",
+  users.ticketOwnershipByFunction.bind(users)
+);
+
+userRoutes.get(
   "/pending",
   users.pending.bind(
     users
@@ -71,6 +76,16 @@ userRoutes.patch(
   users.deactivate.bind(
     users
   )
+);
+
+userRoutes.patch(
+  "/:id/movidesk-owner",
+  users.updateMovideskOwnerName.bind(users)
+);
+
+userRoutes.patch(
+  "/:id/job-function",
+  users.updateJobFunction.bind(users)
 );
 
 userRoutes.patch(

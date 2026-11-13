@@ -2,6 +2,7 @@ import { filterKnownProblemsToScope } from "../services/KnownProblemScopeService
 import { scopedTicketWhere, scopedAzureWhere } from "../domain/OperationalScope";
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/authMiddleware";
+import { hasRoutinePermission } from "../middlewares/routinePermissionMiddleware";
 import { prisma } from "../database/prisma";
 import { azureOperationalScope, ticketOperationalScope } from "../domain/OperationalScope";
 import { SimerMapService } from "../services/SimerMapService";
@@ -47,6 +48,18 @@ const workItemPath = (type: string) => {
 
 export class GlobalController {
   search = async (req: Request, res: Response) => {
+    const authenticatedRequest = req as AuthenticatedRequest;
+    const can = (permission: string) => hasRoutinePermission(authenticatedRequest, permission);
+    const canReadTickets = can("tickets");
+    const canReadCorrections = can("corrections");
+    const canReadEvolutions = can("evolutions");
+    const canReadSupport = can("support");
+    const canReadVersions = can("versions");
+    const allowedWorkItemTypes = [
+      ...(canReadCorrections ? ["corre", "bug", "defect"] : []),
+      ...(canReadEvolutions ? ["evolu"] : []),
+      ...(canReadSupport ? ["apoio"] : []),
+    ].map((term) => ({ workItemType: { contains: term, mode: "insensitive" as const } }));
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query.length < 2) return res.json({ items: [] });
     const numeric = Number(query);
@@ -54,9 +67,32 @@ export class GlobalController {
     const client = typeof req.query.client === "string" ? req.query.client.trim() : "";
     const clientScope = req.query.clientScope === "predominant" || req.query.clientScope === "others" ? req.query.clientScope : "all";
     const clientFilter = client && clientScope !== "all" ? (clientScope === "predominant" ? { client: { equals: client, mode: "insensitive" as const } } : { NOT: { client: { equals: client, mode: "insensitive" as const } } }) : {};
-    const navigation = navigationItems.filter((item) => normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery)).slice(0, 10);
+    const navigation = navigationItems.filter((item) => {
+      const path = item.path.split("?")[0] ?? "";
+      const allowed = path === "/" ? can("dashboard")
+        : path.includes("tickets") ? can("tickets")
+        : path.includes("minha-operacao") ? can("my-operation")
+        : path.includes("atencao") ? can("attention")
+        : path.includes("qualidade") ? can("data-quality")
+        : path.includes("desempenho") ? can("performance")
+        : path.includes("servicos") ? can("services")
+        : path.includes("coordenacao") ? can("coordination")
+        : path.includes("lideranca") ? can("technical-leadership")
+        : path.includes("versoes") ? can("versions")
+        : path.includes("analistas") ? can("analysts")
+        : path.includes("clientes") ? can("clients")
+        : path.includes("correcoes") ? can("corrections")
+        : path.includes("evolucoes") ? can("evolutions")
+        : path.includes("apoios") ? can("support")
+        : path.includes("conhecimento") ? can("knowledge")
+        : path.includes("importar") ? can("imports")
+        : path.includes("investigacao") ? can("tickets") || can("corrections")
+        : path.includes("inteligencia") ? can("dashboard") || can("known-problems")
+        : false;
+      return allowed && normalizeSearch([item.title, item.subtitle, ...item.keywords].join(" ")).includes(normalizedQuery);
+    }).slice(0, 10);
     const [tickets, workItems, versions] = await Promise.all([
-      prisma.ticket.findMany({
+      canReadTickets ? prisma.ticket.findMany({
         where: scopedTicketWhere({ AND: [ticketOperationalScope(), clientFilter, { OR: [
           { subject: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
@@ -64,11 +100,11 @@ export class GlobalController {
           { service: { contains: query, mode: "insensitive" } },
           ...(Number.isSafeInteger(numeric) ? [{ movideskId: numeric }] : []),
         ] }] }),
-        select: { movideskId: true, subject: true, client: true, status: true },
+        select: { movideskId: true, subject: true, client: true, status: true, createdDate: true, owner: true, taskNumber: true, taskStatus: true, deliveredVersion: true },
         orderBy: { createdDate: "desc" }, take: 8,
-      }),
-      prisma.azureWorkItem.findMany({
-        where: scopedAzureWhere({ AND: [azureOperationalScope(), clientFilter, { OR: [
+      }) : Promise.resolve([]),
+      allowedWorkItemTypes.length ? prisma.azureWorkItem.findMany({
+        where: scopedAzureWhere({ AND: [azureOperationalScope(), clientFilter, { OR: allowedWorkItemTypes }, { OR: [
           { title: { contains: query, mode: "insensitive" } },
           { client: { contains: query, mode: "insensitive" } },
           { module: { contains: query, mode: "insensitive" } },
@@ -77,14 +113,32 @@ export class GlobalController {
         ] }] }),
         select: { id: true, title: true, workItemType: true, state: true, client: true },
         orderBy: { azureChangedAt: "desc" }, take: 8,
-      }),
-      prisma.azureWorkItem.findMany({
+      }) : Promise.resolve([]),
+      canReadVersions ? prisma.azureWorkItem.findMany({
         where: scopedAzureWhere({ AND: [azureOperationalScope(), { deliveredVersion: { contains: query, mode: "insensitive" } }] }),
         select: { deliveredVersion: true }, distinct: ["deliveredVersion"], take: 6,
-      }),
+      }) : Promise.resolve([]),
     ]);
 
-    const comparison = client ? await Promise.all([
+    const linkedTaskIds = [...new Set(tickets.map((item) => item.taskNumber).filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0))];
+    const linkedTasks = linkedTaskIds.length && allowedWorkItemTypes.length
+      ? await prisma.azureWorkItem.findMany({
+          where: scopedAzureWhere({ AND: [azureOperationalScope(), { id: { in: linkedTaskIds } }, { OR: allowedWorkItemTypes }] }),
+          select: { id: true, state: true, deliveredVersion: true },
+        })
+      : [];
+    const linkedTaskById = new Map(linkedTasks.map((item) => [item.id, item]));
+    const isCompletedTask = (value: string | null | undefined) => ["closed", "done", "completed", "complete", "resolved", "concluido", "concluida", "fechado", "fechada", "finalizado", "finalizada"].includes(normalizeSearch(value ?? "").trim());
+
+    const visibleWorkItems = workItems.filter((item) => {
+      const type = item.workItemType.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      if (type.includes("apoio")) return canReadSupport;
+      if (type.includes("evolucao")) return canReadEvolutions;
+      if (type.includes("correc") || type.includes("bug") || type.includes("defect")) return canReadCorrections;
+      return false;
+    });
+
+    const comparison = client && canReadTickets ? await Promise.all([
       prisma.ticket.count({ where: scopedTicketWhere({ AND: [{ client: { equals: client, mode: "insensitive" } }, { OR: [
         { subject: { contains: query, mode: "insensitive" } },
         { category: { contains: query, mode: "insensitive" } },
@@ -108,8 +162,26 @@ export class GlobalController {
       otherClients: comparison[2].filter((item) => Boolean(item.client)).length,
     } : null, items: [
       ...navigation,
-      ...tickets.map((item) => ({ id: `ticket-${item.movideskId}`, type: "Ticket", title: `#${item.movideskId} · ${item.subject}`, subtitle: [item.client, item.status].filter(Boolean).join(" · "), path: `/tickets?movidesk=${item.movideskId}` })),
-      ...workItems.map((item) => ({ id: `task-${item.id}`, type: item.workItemType, title: `#${item.id} · ${item.title}`, subtitle: [item.client, item.state].filter(Boolean).join(" · "), path: `${workItemPath(item.workItemType)}?task=${item.id}` })),
+      ...tickets.map((item) => {
+        const linkedTask = item.taskNumber ? linkedTaskById.get(item.taskNumber) : undefined;
+        const taskState = linkedTask?.state ?? item.taskStatus;
+        const deliveredVersion = isCompletedTask(taskState) ? linkedTask?.deliveredVersion ?? item.deliveredVersion : null;
+        return {
+          id: `ticket-${item.movideskId}`,
+          type: "Ticket",
+          title: `#${item.movideskId} · ${item.subject}`,
+          subtitle: [item.client, item.status].filter(Boolean).join(" · "),
+          details: {
+            openedAt: item.createdDate,
+            owner: item.owner,
+            taskNumber: item.taskNumber,
+            taskState: item.taskNumber ? taskState : null,
+            deliveredVersion,
+          },
+          path: `/tickets?movidesk=${item.movideskId}`,
+        };
+      }),
+      ...visibleWorkItems.map((item) => ({ id: `task-${item.id}`, type: item.workItemType, title: `#${item.id} · ${item.title}`, subtitle: [item.client, item.state].filter(Boolean).join(" · "), path: `${workItemPath(item.workItemType)}?task=${item.id}` })),
       ...versions.filter((item) => item.deliveredVersion).map((item) => ({ id: `version-${item.deliveredVersion}`, type: "Versão", title: item.deliveredVersion!, subtitle: "Versão entregue em Work Items", path: `/versoes?search=${encodeURIComponent(item.deliveredVersion!)}` })),
     ] });
   };
