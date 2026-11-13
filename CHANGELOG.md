@@ -3,6 +3,7 @@
 ## 2.1.0-rc.14 — 2026-11-13
 
 ### Resultados e operação
+- Resultados da Equipe: gráfico com altura explícita e consulta por ponto/intervalo, série adaptativa sem corte após 370 dias, CSAT pela data da pesquisa, rankings independentes de resoluções/backlog, entregas filtradas e exportação do detalhamento para Excel.
 - Clientes: visão integrada, seções abertas, cards padronizados, comparações de intervalos, séries mensais e PDF no cabeçalho.
 - Correções/evoluções: Tasks únicas concluídas por `azureClosedAt`, agrupadas por versão; inclui tickets antigos vinculados ao cliente. Versão informada não comprova instalação/homologação.
 - Gráficos: legendas sem checkbox, consulta por ponto/mês/série e ocultação da participação por cliente no foco individual.
