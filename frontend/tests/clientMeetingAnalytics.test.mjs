@@ -12,7 +12,7 @@ const op=data(transpile("operationalMetrics")),sla=data(transpile("timestampSla"
 const main=transpile("clientMeetingAnalytics")
   .replace('"./operationalMetrics"',JSON.stringify(op))
   .replace('"./timestampSla"',JSON.stringify(sla));
-const {buildClientMeetingAnalytics}=await import(data(main));
+const {buildClientMeetingAnalytics,isMeetingEventInMonth}=await import(data(main));
 const input=(id,createdDate,more={})=>({
   id,movideskId:id,subject:"Relato #"+id,client:"BOM JESUS COOPERATIVA AGROINDUSTRIAL - LAPA-PR",
   owner:"SUPORTE",category:"Problema",urgency:"Média",status:"Em atendimento",baseStatus:"InAttendance",
@@ -139,4 +139,13 @@ test("reaberturas vêm de reopenedDate, já existente no snapshot Movidesk",()=>
  const noEvent=input(322,nov,{reopenCount:5});
  const result=buildClientMeetingAnalytics([event,noEvent],cutoff,periodStart,periodEnd,cutoff);
  assert.equal(result.reopened,1);
+});
+
+test("drilldown mensal coincide com o agregado e exclui eventos posteriores ao corte",()=>{
+ const rows=[input(901,"2026-11-12T10:00:00-03:00"),input(902,"2026-11-13T10:00:00-03:00"),input(903,"2026-10-12T10:00:00-03:00")];
+ const result=buildClientMeetingAnalytics(rows,cutoff,periodStart,periodEnd);
+ assert.deepEqual(rows.filter(t=>isMeetingEventInMonth(t,"createdDate","2026-11",cutoff)).map(t=>t.id),result.opened.currentTickets.map(t=>t.id));
+ assert.equal(isMeetingEventInMonth(rows[2],"createdDate","2026-10",cutoff),true);
+ assert.equal(isMeetingEventInMonth(rows[0],"createdDate","2026-13",cutoff),false);
+ assert.equal(isMeetingEventInMonth({...rows[0],satisfactionDate:"invalid"},"satisfactionDate","2026-11",cutoff),false);
 });

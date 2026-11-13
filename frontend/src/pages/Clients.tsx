@@ -579,7 +579,7 @@ export function Clients() {
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
   const meetingAnalytics = useMemo(() => buildClientMeetingAnalytics(
-    clientOperationalTickets, new Date(Math.min(effectiveEndDate.getTime(),endOfDay(new Date()).getTime())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
+    clientOperationalTickets, new Date(Math.min(endOfDay(effectiveEndDate).getTime(),endOfDay(new Date()).getTime())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   // Evolução mensal por tipo, usando a data de abertura de cada atendimento
@@ -1036,10 +1036,7 @@ export function Clients() {
       ? Math.round((portfolioSummary.open / portfolioSummary.total) * 1000) / 10
       : 0;
     const unassigned = scopedTickets.filter((ticket) => !ticket.owner?.trim()).length;
-    const firstCallMeasured = scopedTickets.filter((ticket) => ticket.resolvedInFirstCall != null);
-    const firstCallRate = firstCallMeasured.length
-      ? Math.round((firstCallMeasured.filter((ticket) => ticket.resolvedInFirstCall).length / firstCallMeasured.length) * 1000) / 10
-      : null;
+    const firstCallRate = meetingAnalytics.firstCall.percentage;
     const reopened = scopedTickets.filter((ticket) => (ticket.reopenCount ?? 0) > 0).length;
     const excessiveHandoffs = scopedTickets.filter((ticket) => (ticket.ownerHandoffs ?? 0) >= 3).length;
     const satisfaction = scopedTickets
@@ -1061,7 +1058,7 @@ export function Clients() {
         : "Todos os atendimentos do recorte possuem responsável informado.",
       firstCallRate === null
         ? "A resolução no primeiro contato ainda não possui medição suficiente."
-        : `${firstCallRate}% dos atendimentos medidos foram resolvidos no primeiro contato.`,
+        : `${firstCallRate}% das resoluções medidas no mês ocorreram no primeiro contato.`,
       reopened
         ? `${reopened} atendimento(s) tiveram reabertura e devem ter a efetividade da solução revisada.`
         : "Não foram identificadas reaberturas no recorte.",
@@ -1072,7 +1069,7 @@ export function Clients() {
         ? "Ainda não há avaliações de satisfação no recorte."
         : `A satisfação média é ${averageSatisfaction}/5 em ${satisfaction.length} avaliação(ões).`,
     ];
-  }, [categoryPieData, portfolioSummary, scopedTickets]);
+  }, [categoryPieData, portfolioSummary, scopedTickets, meetingAnalytics]);
 
   const presentationSummary = useMemo(() => {
     const bugs = scopedTickets.filter(isBug);
@@ -1499,8 +1496,8 @@ export function Clients() {
             display:"grid",
             gridTemplateColumns:{
               xs:"minmax(0,1fr)",
-              md:"minmax(260px,1.1fr) minmax(210px,.9fr)",
-              xl:"minmax(300px,1.25fr) minmax(200px,.95fr) auto"
+              md:"minmax(240px, .85fr) minmax(0, 1.15fr)",
+              xl:"minmax(260px, .8fr) minmax(0, 1.2fr)"
             },
             gap:{xs:1.4,md:1.7},alignItems:"end",minWidth:0
           }}>
@@ -1527,7 +1524,7 @@ export function Clients() {
             <Box sx={{minWidth:0,alignSelf:"end"}}>
               <PeriodFilter />
             </Box>
-            <Stack direction="row" sx={{alignItems:"center",justifyContent:{xs:"flex-start",xl:"flex-end"},gap:1,flexWrap:"wrap",pb:{xs:0,md:.25}}}>
+            <Stack direction="row" sx={{alignItems:"center",gridColumn:{md:"1 / -1"},justifyContent:"flex-end",gap:1,flexWrap:"wrap",pb:{xs:0,md:.25}}}>
               <Button size="small" variant={advancedFiltersOpen?"contained":"outlined"}
                 onClick={()=>setAdvancedFiltersOpen(value=>!value)}
                 endIcon={<ExpandMoreOutlined sx={{transform:advancedFiltersOpen?"rotate(180deg)":"none",transition:"transform .2s"}}/>}
@@ -1592,8 +1589,8 @@ export function Clients() {
 
       {/* Pacote gerencial — análise semanal, comparativos e estoque de pendentes públicos */}
       <ClientMeetingInsights analysis={meetingAnalytics} tickets={clientOperationalTickets}
-        selectedClient={selectedClient} onFocusClient={setSelectedClient}
-        onOpenPresentation={()=>{setPresentationExpanded(true);window.requestAnimationFrame(()=>document.getElementById("client-export-content")?.scrollIntoView({behavior:"smooth",block:"start"}));}}
+        selectedClient={selectedClient}
+        onOpenPresentation={()=>{setPresentationExpanded(true);window.setTimeout(()=>document.getElementById("client-export-content")?.scrollIntoView({behavior:"smooth",block:"start"}),350);}}
         onShowTickets={(title,ids,subtitle)=>{
           const selected=new Set(ids);
           showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
@@ -1604,22 +1601,13 @@ export function Clients() {
           <Box>
             <Typography sx={{fontWeight:800}}>Detalhamento operacional e histórico</Typography>
             <Typography variant="caption" color="text.secondary">
-              Cards do Dashboard, tendências por categoria, indicadores de desempenho e resumo executivo — recolhidos para evitar informações repetidas
+              Análise do intervalo selecionado, categorias, riscos e desenvolvimento vinculado
             </Typography>
           </Box>
         </AccordionSummary>
         <AccordionDetails sx={{pt:0,px:{xs:1.5,md:2}}}>
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
-      <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
-        <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
-          info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
-          onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
-        <MetricCard title="Backlog atual · SIMER" value={clientOperationalCohorts.backlog.length} description="Pendências inclusive de períodos anteriores"
-          info={{ title: "Backlog atual · SIMER", summary: "Pendências inclusive de períodos anteriores", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.baseStatus", periodRule: "Fotografia atual, inclusive tickets abertos antes do período." }}
-          onClick={() => showTickets("Backlog atual · SIMER", clientOperationalCohorts.backlog, "Pendências inclusive de períodos anteriores")} />
-        <MetricCard title="Resolvidos no período" value={clientOperationalCohorts.resolved.length} description="Resolução no intervalo"
-          info={{ title: "Resolvidos no período", summary: "Resolução no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.resolvedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
-          onClick={() => showTickets("Resolvidos no período", clientOperationalCohorts.resolved, "Resolução no intervalo")} />
+      <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, maxWidth:440, gridTemplateColumns:"minmax(0,1fr)" }}>
         <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
@@ -1724,14 +1712,12 @@ export function Clients() {
           </Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
             {performanceDeltas.map((metric) => (
-              <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.5, minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary">{metric.label}</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: "1.35rem" }}>{metric.value === null ? "Sem medição" : `${metric.value.toFixed(1)}%`}</Typography>
-                <Typography variant="caption" color={metric.difference == null ? "text.secondary" : metric.difference >= 0 ? "success.main" : "error.main"}>
-                  {metric.difference === null ? "Comparação indisponível" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{metric.measured} ticket(s) no denominador</Typography>
-              </Box>
+              <ExecutiveKpiCard key={metric.label} title={metric.label}
+                value={metric.value === null ? "N/D" : `${metric.value.toFixed(1)}%`}
+                subtitle={`${metric.measured} ticket(s) medidos • ${metric.difference === null ? "Sem comparação" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}`}
+                info="Comparação dos indicadores mensais. Valores sem medição ficam fora do denominador; a taxa da coorte considera a situação atual dos tickets abertos no mês."
+                accent={aliareColors.green}/>
+
             ))}
           </Box>
           <Box sx={{ height: 300, width: "100%" }}>
@@ -1770,7 +1756,7 @@ export function Clients() {
           <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}
             sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, mb: 1.5 }}>
             <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Resumo Executivo</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Indicadores complementares do intervalo</Typography>
               <Typography variant="caption" color="text.secondary">
                 Indicadores para análise interna e apresentação de resultados ao cliente
               </Typography>
@@ -1778,7 +1764,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <KpiGrid className="client-print-kpi-grid">
+          <KpiGrid className="client-print-kpi-grid" sx={{gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))"}}}>
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -1792,41 +1778,6 @@ export function Clients() {
                 periodRule: "Respeita período, cliente e categoria selecionados.",
               }}
               onClick={() => showStatusTickets("resolved")}
-            />
-            <ExecutiveMetric
-              title="SLA 1ª resposta"
-              value={formatSlaPercent(portfolioSummary.responseSla.percent)}
-              description={portfolioSummary.responseSla.measured ? `${portfolioSummary.responseSla.onTime} de ${portfolioSummary.responseSla.measured} medidos no prazo` : "Sem medição no recorte"}
-              info={{
-                title: "SLA 1ª resposta",
-                summary: "Percentual de tickets com primeira resposta concluída até o prazo informado.",
-                calculation: "Medições no prazo ÷ medições válidas × 100.",
-                source: "Movidesk",
-                reference: "firstResponseDate ≤ firstResponseDueDate",
-                periodRule: "SLA de solução usa tickets resolvidos no período; itens sem os timestamps necessários ficam fora do denominador.",
-              }}
-              onClick={() => showTickets("SLA 1ª resposta - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.firstResponseDate && ticket.firstResponseDueDate)), "Tickets com timestamps suficientes para medição")}
-            />
-            <ExecutiveMetric
-              title="SLA solução"
-              value={formatSlaPercent(portfolioSummary.solutionSla.percent)}
-              description={portfolioSummary.solutionSla.measured ? `${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos no prazo` : "Sem medição no recorte"}
-              info={{
-                title: "SLA solução",
-                summary: "Percentual de tickets concluídos até o prazo de solução informado.",
-                calculation: "Medições no prazo ÷ medições válidas × 100.",
-                source: "Movidesk",
-                reference: "resolvedDate/closedDate ≤ dueDate",
-                periodRule: "Usa a data de resolução para pertencer ao período; itens sem os timestamps necessários ficam fora do denominador.",
-              }}
-              onClick={() => showTickets("SLA solução - tickets medidos", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets, "Tickets com timestamps suficientes para medição")}
-            />
-            <ExecutiveMetric
-              title="CSAT"
-              value={portfolioSummary.csat.average == null ? "—" : portfolioSummary.csat.average.toLocaleString("pt-BR",{maximumFractionDigits:2})}
-              description={`${portfolioSummary.csat.responses} avaliação(ões) no recorte`}
-              info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos atendimentos do cliente.", calculation:"Média das notas da Pesquisa de Satisfação Movidesk.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita os filtros e período atuais." }}
-              onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
             />
             <ExecutiveMetric
               title="Desenvolvimento"
@@ -1897,7 +1848,7 @@ export function Clients() {
 
           <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
             {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
-              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Visão do intervalo selecionado</Typography>
               <KpiGrid className="client-print-kpi-grid" sx={{mb: 2}}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
                 <PresentationKpi title="Categoria Bug" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
@@ -3087,7 +3038,7 @@ function StandardMetricCard({
 }: {
   title: string; value: ReactNode; description: string; info: MetricInfoDefinition; accentColor: string; onClick?: () => void;
 }) {
-  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.calculation}`} metadata={{source:info.source,periodRule:info.periodRule,denominator:info.reference}} accent={accentColor} onClick={onClick} />;
 }
 
 

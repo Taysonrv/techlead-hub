@@ -39,6 +39,12 @@ function eventWithin(ticket:WeeklyTicket,field:"createdDate"|"resolvedDate"|"clo
   const raw=ticket[field];if(!raw)return false;
   const t=Date.parse(raw);return Number.isFinite(t)&&t>=start.getTime()&&t<=end.getTime();
 }
+/** Drilldowns use the same event boundary as the monthly aggregates. */
+export function isMeetingEventInMonth(ticket:WeeklyTicket,field:"createdDate"|"resolvedDate"|"closedDate"|"satisfactionDate"|"reopenedDate",month:string,cutoff:Date):boolean {
+  const [year,number]=month.split("-").map(Number);
+  if(!Number.isInteger(year)||!Number.isInteger(number)||number<1||number>12)return false;
+  return eventWithin(ticket,field,new Date(year,number-1,1),new Date(Math.min(new Date(year,number,0,23,59,59,999).getTime(),cutoff.getTime())));
+}
 const monthKey=(date:Date)=>date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0");
 const firstDay=(y:number,m:number)=>new Date(y,m,1,0,0,0,0);
 const lastDay=(y:number,m:number)=>new Date(y,m+1,0,23,59,59,999);

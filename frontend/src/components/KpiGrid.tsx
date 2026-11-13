@@ -5,7 +5,6 @@ import { kpiLayout } from "../theme/layoutTokens";
 /** Indicadores seguem a mesma largura e espaçamento em todos os módulos. */
 export function KpiGrid({ sx, ...props }: BoxProps) {
   return <Box {...props} data-kpi-grid sx={[
-    ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
     {
       display: "grid",
       width: "100%",
@@ -16,5 +15,6 @@ export function KpiGrid({ sx, ...props }: BoxProps) {
       alignItems: "stretch",
       "& > *": { minWidth: 0 },
     },
+    ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
   ]} />;
 }
