@@ -1,5 +1,5 @@
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
-import { buildTeamResults, localDateKey, type TeamTimelineBucket } from "../utils/teamResultsAnalytics";
+import { buildTeamResults, type TeamTimelineBucket } from "../utils/teamResultsAnalytics";
 import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "../components/ExecutiveChartControls";
 import { ClientDeliveryInsights } from "../components/ClientDeliveryInsights";
 import { KpiGrid } from "../components/KpiGrid";
@@ -12,8 +12,6 @@ import { isTicketCancelled } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
 import { SectionInfo } from "../components/SectionInfo";
 import { detailDrawerPaperSx } from "../theme/layoutTokens";
-import { TeamMeetingManagement } from "../components/TeamMeetingManagement";
-import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { KpiCard } from "../components/KpiCard";
 import { ExecutiveSection } from "../components/ExecutiveSection";
@@ -145,7 +143,6 @@ function Metric({ title, value, subtitle, onClick }: { title: string; value: str
 }
 export default function TeamResults() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [searchParams] = useSearchParams();
   const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
   const [updatedAt,setUpdatedAt]=useState<Date|null>(null);
   const [loading, setLoading] = useState(true);
@@ -157,7 +154,7 @@ export default function TeamResults() {
   const [presentation, setPresentation] = useState(false);
   const presentationRef = useRef<HTMLDivElement>(null);
   const [sectionIndex, setSectionIndex] = useState(0);
-  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-by-type", "team-results-by-service", "team-results-by-client", "team-results-owners", "team-results-backlog", "team-results-deliveries", "meeting-actions", "team-results-actions"];
+  const sections = ["team-results-comparison", "team-results-trend", "team-results-status", "team-results-by-type", "team-results-by-service", "team-results-by-client", "team-results-owners", "team-results-backlog", "team-results-deliveries", "team-results-actions"];
   const jump = (index: number) => { const next = Math.max(0, Math.min(sections.length - 1, index)); setSectionIndex(next); document.getElementById(sections[next])?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   useEffect(() => { const update = () => setPresentation(document.fullscreenElement === presentationRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
 
@@ -371,7 +368,6 @@ export default function TeamResults() {
         <ClientDeliveryInsights tickets={scope} start={range.start} end={range.end} onShowTickets={(title,ids)=>{const keys=new Set(ids);setDetail({title,tickets:scope.filter(t=>keys.has(t.id))});}}/>
       </Section>}
 
-      <TeamMeetingManagement initialDate={searchParams.get("meeting") || undefined} weekLabel={range ? range.start.toLocaleDateString("pt-BR") + " a " + range.end.toLocaleDateString("pt-BR") : ""} snapshot={{ periodStart: range?localDateKey(range.start):"", periodEnd: range?localDateKey(range.end):"", opened: results.opened.length, resolved: results.resolved.length, closed: results.closed.length, backlog: results.backlog.length, stopped: results.stopped.length, capturedAt: new Date().toISOString() }} />
       <Section id="team-results-actions" title="Pontos para discussão e encaminhamentos">
         <Stack spacing={1}>
           <Typography variant="body2">• Avaliar a diferença entre entradas ({results.opened.length}) e resoluções ({results.resolved.length}) no período.</Typography>
