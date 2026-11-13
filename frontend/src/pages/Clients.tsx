@@ -1013,12 +1013,6 @@ export function Clients() {
     const firstCallRate = meetingAnalytics.firstCall.percentage;
     const reopened = scopedTickets.filter((ticket) => (ticket.reopenCount ?? 0) > 0).length;
     const excessiveHandoffs = scopedTickets.filter((ticket) => (ticket.ownerHandoffs ?? 0) >= 3).length;
-    const satisfaction = scopedTickets
-      .map((ticket) => ticket.satisfactionScore)
-      .filter((value): value is number => value != null);
-    const averageSatisfaction = satisfaction.length
-      ? Math.round((satisfaction.reduce((sum, value) => sum + value, 0) / satisfaction.length) * 10) / 10
-      : null;
     return [
       topCategory
         ? `${topCategory.name} concentra ${Math.round((topCategory.value / Math.max(scopedTickets.length, 1)) * 100)}% dos atendimentos do recorte.`
@@ -1039,9 +1033,9 @@ export function Clients() {
       excessiveHandoffs
         ? `${excessiveHandoffs} atendimento(s) tiveram três ou mais trocas de responsável.`
         : "Não há concentração relevante de trocas de responsável.",
-      averageSatisfaction === null
-        ? "Ainda não há avaliações de satisfação no recorte."
-        : `A satisfação média é ${averageSatisfaction}/5 em ${satisfaction.length} avaliação(ões).`,
+      meetingAnalytics.csat.percentage === null
+        ? "CSAT: sem avaliações válidas recebidas no mês de referência."
+        : `CSAT do mês: ${meetingAnalytics.csat.percentage.toLocaleString("pt-BR")}% de avaliações positivas, em ${meetingAnalytics.csat.measured} resposta(s).`,
     ];
   }, [categoryPieData, portfolioSummary, scopedTickets, meetingAnalytics]);
 
@@ -1482,11 +1476,18 @@ export function Clients() {
         </Box>
         <Box sx={{pt:0,px:{xs:1.5,md:2}}}>
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
-      <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, maxWidth:440, gridTemplateColumns:"minmax(0,1fr)" }}>
+      <Box className="clients-closure-summary" sx={{display:"grid",gridTemplateColumns:{xs:"minmax(0,1fr)",md:"minmax(280px,360px) minmax(0,1fr)"},gap:2,mb:2,alignItems:"center"}}>
         <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
-      </KpiGrid>
+      <Box sx={{minWidth:0,px:{xs:0,md:1}}}>
+          <Typography sx={{fontWeight:800,mb:.5}}>Encerramentos administrativos</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{lineHeight:1.65}}>
+            {clientOperationalCohorts.closed.length} atendimento(s) encerrado(s) entre {effectiveStartDate.toLocaleDateString("pt-BR")} e {effectiveEndDate.toLocaleDateString("pt-BR")}.
+            O encerramento pode ocorrer após a resolução. Esses volumes não devem ser somados como atendimentos distintos.
+          </Typography>
+        </Box>
+      </Box>
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
         <CardContent>
           <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
@@ -1701,10 +1702,7 @@ export function Clients() {
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
                 <PresentationKpi title="Tempo médio de solução" value={formatMinutes(solvedInPeriod.averageMinutes)} detail={`${solvedInPeriod.measured} resolvido(s) com tempo medido no período`} color="#7C3AED" onClick={() => showTickets("Resolvidos no período com tempo de solução", solvedInPeriod.tickets)} />
               </KpiGrid>
-              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
-                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
-              </Box>
+
             </Box>
 
             <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
@@ -1753,10 +1751,7 @@ export function Clients() {
                     : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
                 </Typography>
               </Box>
-              <Box className="client-print-conclusion" sx={{ p: 2.5, borderRadius: 2, bgcolor: "rgba(0,138,104,.08)", border: "1px solid rgba(0,138,104,.25)" }}>
-                <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
-              </Box>
+
             </Box>
 
           </CardContent>

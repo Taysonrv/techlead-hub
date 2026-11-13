@@ -93,6 +93,15 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           {br(a.resolved.current)} resolvidos e {br(a.opened.current)} abertos no mês de referência.
           {" "}{br(allBacklog)} pendências públicas no estoque atual{critical?", sendo "+br(critical)+" de urgência crítica":""}.
         </Typography>
+        <Typography variant="body2" sx={{mt:.7,lineHeight:1.6}}>
+          {a.opened.current===0
+            ? "Sem aberturas no mês para calcular a relação entre resoluções e entradas."
+            : `Relação resolvidos/abertos: ${(a.resolved.current/a.opened.current*100).toLocaleString("pt-BR",{maximumFractionDigits:1})}%.`}
+          {" "}Diferença entre eventos: {a.resolved.current-a.opened.current>0?"+":""}{br(a.resolved.current-a.opened.current)} resoluções em relação às aberturas.
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.4}}>
+          A relação pode superar 100% ao resolver tickets antigos; não representa taxa de resolução da coorte nem variação histórica do backlog.
+        </Typography>
         <Typography variant="caption" color="text.secondary">Movimentos mensais até {nowName}. As pendências representam a situação atual, inclusive de meses anteriores.</Typography>
       </Box>
       <Typography variant="subtitle2" sx={{fontWeight:800,mb:1.2}}>Demanda e carteira</Typography>
@@ -149,6 +158,15 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           onClick={()=>open("Avaliações de satisfação recebidas em "+month,
             tickets.filter(t=>typeof t.satisfactionScore==="number" && t.satisfactionScore>=1 && t.satisfactionScore<=5 && inMonth(t,"satisfactionDate",month)))}/>
       </KpiGrid>
+      <Box sx={{p:1.5,mb:2,border:"1px solid",borderColor:"divider",borderRadius:2}}>
+        <Typography variant="subtitle2" sx={{fontWeight:800,mb:.5}}>Cobertura das medições</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{lineHeight:1.6}}>
+          SLA de resposta: {br(a.responseSla.measured)} de {br(a.opened.current)} abertos no mês.
+          {" "}SLA de solução: {br(a.solutionSla.measured)} de {br(a.resolved.current)} resolvidos no mês.
+          {" "}Primeiro contato: {br(a.firstCall.measured)} de {br(a.firstCall.eligible)} resolvidos com campo informado.
+        </Typography>
+        <Typography variant="caption" color="text.secondary">Resultados de SLA consideram somente registros mensuráveis. Ausência de informação não significa cumprimento ou descumprimento.</Typography>
+      </Box>
       {(a.csat.measured===0||(a.firstCall.measured>0&&a.firstCall.count===0))&&
         <Typography variant="caption" color="text.secondary" sx={{display:"block",mb:2,px:.5}}>
           {a.csat.measured===0

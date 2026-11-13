@@ -126,3 +126,12 @@ test("cliente e período possuem rótulos alinhados e a seleção do cliente nã
  assert.ok(page.includes('maxWidth:{xs:"100%",xl:620}'));
  assert.match(page, /gridTemplateColumns:\s*\{\s*xs:\s*"minmax\(0,1fr\)"/);
 });
+
+test("encerramento possui largura legível e contexto sem misturar resolução com fechamento",()=>{
+ assert.ok(page.includes('className="clients-closure-summary"'));
+ assert.ok(page.includes('md:"minmax(280px,360px) minmax(0,1fr)"'));
+ assert.ok(!page.includes('maxWidth:440'));
+ assert.ok(page.includes('Esses volumes não devem ser somados'));
+ assert.ok(meeting.includes('Cobertura das medições'));
+ assert.ok(meeting.includes('não representa taxa de resolução da coorte'));
+});
