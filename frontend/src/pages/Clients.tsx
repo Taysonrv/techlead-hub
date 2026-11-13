@@ -1,4 +1,7 @@
-import { PublicClientEnrichment } from "../components/PublicIntegrations";
+import { ClientDeliveryInsights } from "../components/ClientDeliveryInsights";
+import { ClientMeetingInsights } from "../components/ClientMeetingInsights";
+import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
+import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
 import { KpiGrid } from "../components/KpiGrid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -13,13 +16,12 @@ import {
   Chip,
   Divider,
   Drawer,
+  Autocomplete,
+  Collapse,
   TextField,
   InputAdornment,
-  FormControl,
   IconButton,
-  InputLabel,
   MenuItem,
-  Select,
   Snackbar,
   Stack,
   Table,
@@ -31,29 +33,21 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
 
 import {
-  ArrowBackOutlined,
   SearchOutlined,
   CloseOutlined,
   OpenInNewOutlined,
   ContentCopyOutlined,
-  ArrowForwardOutlined,
-  FullscreenExitOutlined,
   PictureAsPdfOutlined,
+  ExpandMoreOutlined,
 } from "@mui/icons-material";
 
 import {
-  Bar,
-  BarChart,
   Line,
   LineChart,
   Legend,
   CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -89,12 +83,13 @@ type AzureTaskSummary = {
   id: number; workItemType: string; title: string; state: string;
   assignedToName: string | null; criticality: string | null;
   deliveredVersion: string | null; prioritized: boolean | null; blockedProcess: boolean | null;
-  stateChangedAt?: string | null; azureChangedAt: string | null;
+  azureClosedAt?: string | null; stateChangedAt?: string | null; azureChangedAt: string | null;
 };
 
 type Ticket = {
   id: number;
   movideskId: number;
+  ticketType?: number | null;
 
   protocol: string | null;
   subject: string;
@@ -139,7 +134,9 @@ type Ticket = {
   resolvedInFirstCall?: boolean | null;
   ownerHandoffs?: number;
   reopenCount?: number;
+  reopenedDate?: string | null;
   satisfactionScore?: number | null;
+  satisfactionDate?: string | null;
 
   taskNumber: number | null;
   taskStatus: string | null;
@@ -206,37 +203,13 @@ const PIE_COLORS = [
   ...chartPalette,
 ];
 
-const STATUS_COLORS: Record<
-  string,
-  string
-> = {
-  Novos:
-    semanticChartColors.normal,
-
-  "Em Atendimento":
-    aliareColors.green,
-
-  Parados:
-    semanticChartColors.attention,
-
-  Resolvidos:
-    semanticChartColors.positive,
-};
-
 /* =========================================================
    COMPONENTE PRINCIPAL
 ========================================================= */
 
 export function Clients() {
-  const theme = useTheme();
-  const [hiddenClientSlices, setHiddenClientSlices] = useState<Set<string>>(() => new Set());
-  const [hiddenCategorySlices, setHiddenCategorySlices] = useState<Set<string>>(() => new Set());
-  const [hiddenStatusSlices, setHiddenStatusSlices] = useState<Set<string>>(() => new Set());
   const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
-  const presentationRef = useRef<HTMLDivElement>(null);
-  const [presentationPage, setPresentationPage] = useState(0);
-  const [isPresenting, setIsPresenting] = useState(false);
   const [exportingPresentation, setExportingPresentation] = useState(false);
 
   const [tickets, setTickets] =
@@ -265,6 +238,7 @@ export function Clients() {
   const [owner, setOwner] = useState("");
   const [executiveArea, setExecutiveArea] = useState("");
   const [businessArea, setBusinessArea] = useState("");
+  const [advancedFiltersOpen,setAdvancedFiltersOpen]=useState(false);
 
   /* Drill-down */
 
@@ -322,22 +296,6 @@ export function Clients() {
     const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
     return () => { unsubscribe(); controller.abort(); };
   }, []);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const active = document.fullscreenElement === presentationRef.current;
-      setIsPresenting(active);
-      if (!active) setPresentationPage(0);
-    };
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
-
-  async function startPresentation() {
-    setPresentationPage(0);
-    await presentationRef.current?.requestFullscreen?.();
-  }
 
   async function exportClientPresentation() {
     if (exportingPresentation) return;
@@ -406,7 +364,7 @@ export function Clients() {
   const clientOptions = useMemo(() => {
     return Array.from(
       new Set(
-        periodTickets
+        tickets.filter((ticket) => ticket.isWithSimer === true)
           .map(
             (ticket) =>
               ticket.client
@@ -426,7 +384,7 @@ export function Clients() {
         "pt-BR"
       )
     );
-  }, [periodTickets]);
+  }, [tickets]);
 
   /* =======================================================
      FILTRO CLIENTE
@@ -550,7 +508,7 @@ export function Clients() {
     const start = startOfDay(effectiveStartDate);
     const end = endOfDay(effectiveEndDate);
     return tickets.filter((ticket) => {
-      if (ticket.isWithSimer !== true || !ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+      if (ticket.isWithSimer !== true || !ticket.resolvedDate) return false;
       const resolved = new Date(ticket.resolvedDate);
       if (!Number.isFinite(resolved.getTime()) || resolved < start || resolved > end) return false;
       return (!selectedClient || ticket.client === selectedClient)
@@ -561,6 +519,18 @@ export function Clients() {
         && (!executiveArea || classifyExecutiveArea(ticket) === executiveArea);
     });
   }, [tickets, effectiveStartDate, effectiveEndDate, selectedClient, category, status, owner, businessArea, executiveArea]);
+
+  const solvedInPeriod = useMemo(()=>{
+    const measured=solutionScopedTickets.map(ticket=>({ticket,minutes:ticketResolutionMinutes(ticket)}))
+      .filter((entry):entry is {ticket:Ticket;minutes:number}=>entry.minutes!==null);
+    return {
+      tickets:measured.map(entry=>entry.ticket),
+      measured:measured.length,
+      averageMinutes:measured.length
+        ? Math.round(measured.reduce((sum,entry)=>sum+entry.minutes,0)/measured.length)
+        : null,
+    };
+  },[solutionScopedTickets]);
 
   /* =======================================================
      MÉTRICAS POR CLIENTE
@@ -583,32 +553,9 @@ export function Clients() {
     clientOperationalTickets,
     { start: startOfDay(effectiveStartDate), end: endOfDay(effectiveEndDate) },
   ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
-
-  const movementSeries = useMemo(() => {
-    const end = endOfDay(effectiveEndDate);
-    const firstMonth = new Date(end.getFullYear(), end.getMonth() - 5, 1);
-    const byMonth = new Map<string, { periodo: string; abertos: number; resolvidos: number; encerrados: number }>();
-    for (let month = new Date(firstMonth); month <= end; month.setMonth(month.getMonth() + 1)) {
-      const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
-      byMonth.set(key, { periodo: key, abertos: 0, resolvidos: 0, encerrados: 0 });
-    }
-    for (const ticket of clientOperationalTickets) {
-      for (const [dateValue, field] of [
-        [ticket.createdDate, "abertos"],
-        [ticket.resolvedDate, "resolvidos"],
-        [ticket.closedDate, "encerrados"],
-      ] as const) {
-        if (!dateValue) continue;
-        if (field === "resolvidos" && !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) continue;
-        const date = new Date(dateValue);
-        if (!Number.isFinite(date.getTime()) || date < firstMonth || date > end) continue;
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-        const row = byMonth.get(key);
-        if (row) row[field] += 1;
-      }
-    }
-    return [...byMonth.values()];
-  }, [clientOperationalTickets, effectiveEndDate]);
+  const meetingAnalytics = useMemo(() => buildClientMeetingAnalytics(
+    clientOperationalTickets, new Date(Math.min(endOfDay(effectiveEndDate).getTime(),endOfDay(new Date()).getTime())), startOfDay(effectiveStartDate), endOfDay(effectiveEndDate),
+  ), [clientOperationalTickets, effectiveStartDate, effectiveEndDate]);
 
   // Evolução mensal por tipo, usando a data de abertura de cada atendimento
   // (independente do intervalo curto selecionado para o indicador diário).
@@ -642,13 +589,11 @@ export function Clients() {
     return { types: overflow ? [...types, "Outros"] : types, rows };
   }, [clientOperationalTickets, effectiveEndDate]);
 
-  const [hiddenMovementLines, setHiddenMovementLines] = useState<Set<string>>(() => new Set());
   const [hiddenCategoryLines, setHiddenCategoryLines] = useState<Set<string>>(() => new Set());
-  const toggleLine = (key: string, count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
-    setter((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key);
-      else if (next.size < count - 1) next.add(key);
+  const toggleLine = (key: string, _count: number, setter: React.Dispatch<React.SetStateAction<Set<string>>>) => {
+    setter(previous=>{
+      const next=new Set(previous);
+      if(next.has(key))next.delete(key);else next.add(key);
       return next;
     });
   };
@@ -657,17 +602,24 @@ export function Clients() {
     setHiddenPerformanceLines((previous) => {
       const next = new Set(previous);
       if (next.has(key)) next.delete(key);
-      else if (next.size < 2) next.add(key); // preserve at least one visible series
+      else next.add(key); // todos os campos podem ser ocultados e reativados pela legenda
       return next;
     });
   };
 
   const monthlyPerformance = useMemo(() => {
-    const end = endOfDay(effectiveEndDate);
+    const end = endOfDay(new Date(Math.min(effectiveEndDate.getTime(), Date.now())));
+    const endDay=end.getDate();
+    const fullCurrentMonth=endDay===new Date(end.getFullYear(),end.getMonth()+1,0).getDate();
     const months = Array.from({ length: 6 }, (_, index) => {
       const date = new Date(end.getFullYear(), end.getMonth() - 5 + index, 1);
       const next = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: next };
+      // Mês anterior até o mesmo dia de corte, quando o mês atual está incompleto.
+      const comparisonEnd=index===4&&!fullCurrentMonth
+        ? new Date(date.getFullYear(),date.getMonth(),Math.min(endDay,new Date(date.getFullYear(),date.getMonth()+1,0).getDate()),23,59,59,999)
+        : null;
+      const finish=index===5?new Date(end.getTime()+1):comparisonEnd?new Date(comparisonEnd.getTime()+1):next;
+      return { periodo: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`, start: date, finish: finish };
     });
     return months.map(({ periodo, start, finish }) => {
       const created = clientOperationalTickets.filter((ticket) => {
@@ -675,7 +627,7 @@ export function Clients() {
         return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
       });
       const resolved = clientOperationalTickets.filter((ticket) => {
-        if (!ticket.resolvedDate || !["Resolved", "Closed"].includes(ticket.baseStatus ?? "")) return false;
+        if (!ticket.resolvedDate) return false;
         const d = new Date(ticket.resolvedDate);
         return Number.isFinite(d.getTime()) && d >= start && d < finish && d <= end;
       });
@@ -683,7 +635,7 @@ export function Clients() {
       const solution = calculateTimestampSla(resolved, "solution");
       const finishedFromEntries = created.filter((ticket) => ["Resolved", "Closed"].includes(ticket.baseStatus ?? "")).length;
       return {
-        periodo,
+        periodo,start,finish,
         resposta: response.percentage,
         solucao: solution.percentage,
         resolucao: created.length ? Math.round(finishedFromEntries / created.length * 1000) / 10 : null,
@@ -1043,115 +995,15 @@ export function Clients() {
      PIZZA 1 - DISTRIBUIÇÃO POR CLIENTE
   ======================================================= */
 
-  const clientPieData =
-    useMemo<PieDataItem[]>(() => {
-      const grouped =
-        new Map<
-          string,
-          number
-        >();
-
-      scopedTickets.forEach(
-        (ticket) => {
-          const client =
-            ticket.client ??
-            "Sem cliente";
-
-          grouped.set(
-            client,
-            (grouped.get(
-              client
-            ) ?? 0) + 1
-          );
-        }
-      );
-
-      const ordered =
-        Array.from(
-          grouped.entries()
-        )
-          .map(
-            ([
-              name,
-              value,
-            ]) => ({
-              name,
-              value,
-            })
-          )
-          .sort(
-            (a, b) =>
-              b.value -
-              a.value
-          );
-
-      /*
-       * Para preservar a leitura executiva do gráfico,
-       * exibimos os seis principais clientes e agrupamos
-       * o restante em "Outros".
-       */
-      const top =
-        ordered.slice(
-          0,
-          6
-        );
-
-      const otherValue =
-        ordered
-          .slice(6)
-          .reduce(
-            (
-              total,
-              item
-            ) =>
-              total +
-              item.value,
-            0
-          );
-
-      if (
-        otherValue >
-        0
-      ) {
-        top.push({
-          name:
-            "Outros",
-
-          value:
-            otherValue,
-        });
-      }
-
-      return top;
-    }, [
-      scopedTickets,
-    ]);
-
+  const clientPieData = useMemo<PieDataItem[]>(() => groupChartData(
+    scopedTickets,(ticket)=>ticket.client?.trim()||"Sem cliente",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
   const categoryPieData = useMemo<PieDataItem[]>(() => groupChartData(
-    scopedTickets,
-    (ticket) => ticket.category?.trim() || "Sem categoria",
-    7,
-  ), [scopedTickets]);
-
+    scopedTickets,(ticket)=>ticket.category?.trim()||"Sem categoria",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
   const ownerChartData = useMemo<PieDataItem[]>(() => groupChartData(
-    scopedTickets,
-    (ticket) => ticket.owner?.trim() || "Sem responsável",
-    8,
-  ), [scopedTickets]);
-
-  const visibleClientPieData = useMemo(() => clientPieData.filter((item) => !hiddenClientSlices.has(item.name)), [clientPieData, hiddenClientSlices]);
-  const visibleCategoryPieData = useMemo(() => categoryPieData.filter((item) => !hiddenCategorySlices.has(item.name)), [categoryPieData, hiddenCategorySlices]);
-  const clientChartData = visibleClientPieData.length > 0 ? visibleClientPieData : clientPieData;
-  const categoryChartData = visibleCategoryPieData.length > 0 ? visibleCategoryPieData : categoryPieData;
-
-  const togglePieSlice = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, data: PieDataItem[], name: string) => {
-    setter((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else if (data.length - next.size > 1) next.add(name);
-      return next;
-    });
-  };
+    scopedTickets,(ticket)=>ticket.owner?.trim()||"Sem responsável",Number.POSITIVE_INFINITY,
+  ),[scopedTickets]);
 
   const executiveInsights = useMemo(() => {
     const topCategory = categoryPieData[0];
@@ -1159,18 +1011,9 @@ export function Clients() {
       ? Math.round((portfolioSummary.open / portfolioSummary.total) * 1000) / 10
       : 0;
     const unassigned = scopedTickets.filter((ticket) => !ticket.owner?.trim()).length;
-    const firstCallMeasured = scopedTickets.filter((ticket) => ticket.resolvedInFirstCall != null);
-    const firstCallRate = firstCallMeasured.length
-      ? Math.round((firstCallMeasured.filter((ticket) => ticket.resolvedInFirstCall).length / firstCallMeasured.length) * 1000) / 10
-      : null;
+    const firstCallRate = meetingAnalytics.firstCall.percentage;
     const reopened = scopedTickets.filter((ticket) => (ticket.reopenCount ?? 0) > 0).length;
     const excessiveHandoffs = scopedTickets.filter((ticket) => (ticket.ownerHandoffs ?? 0) >= 3).length;
-    const satisfaction = scopedTickets
-      .map((ticket) => ticket.satisfactionScore)
-      .filter((value): value is number => value != null);
-    const averageSatisfaction = satisfaction.length
-      ? Math.round((satisfaction.reduce((sum, value) => sum + value, 0) / satisfaction.length) * 10) / 10
-      : null;
     return [
       topCategory
         ? `${topCategory.name} concentra ${Math.round((topCategory.value / Math.max(scopedTickets.length, 1)) * 100)}% dos atendimentos do recorte.`
@@ -1184,23 +1027,22 @@ export function Clients() {
         : "Todos os atendimentos do recorte possuem responsável informado.",
       firstCallRate === null
         ? "A resolução no primeiro contato ainda não possui medição suficiente."
-        : `${firstCallRate}% dos atendimentos medidos foram resolvidos no primeiro contato.`,
+        : `${firstCallRate}% das resoluções medidas no mês ocorreram no primeiro contato.`,
       reopened
         ? `${reopened} atendimento(s) tiveram reabertura e devem ter a efetividade da solução revisada.`
         : "Não foram identificadas reaberturas no recorte.",
       excessiveHandoffs
         ? `${excessiveHandoffs} atendimento(s) tiveram três ou mais trocas de responsável.`
         : "Não há concentração relevante de trocas de responsável.",
-      averageSatisfaction === null
-        ? "Ainda não há avaliações de satisfação no recorte."
-        : `A satisfação média é ${averageSatisfaction}/5 em ${satisfaction.length} avaliação(ões).`,
+      meetingAnalytics.csat.percentage === null
+        ? "CSAT: sem avaliações válidas recebidas no mês de referência."
+        : `CSAT do mês: ${meetingAnalytics.csat.percentage.toLocaleString("pt-BR")}% de avaliações positivas, em ${meetingAnalytics.csat.measured} resposta(s).`,
     ];
-  }, [categoryPieData, portfolioSummary, scopedTickets]);
+  }, [categoryPieData, portfolioSummary, scopedTickets, meetingAnalytics]);
 
   const presentationSummary = useMemo(() => {
     const bugs = scopedTickets.filter(isBug);
     const withTask = scopedTickets.filter((ticket) => Boolean(ticket.azureWorkItem || ticket.taskNumber));
-    const pending = scopedTickets.filter(isOpen);
     const taskItems = Array.from(new Map(
       withTask.map((ticket) => [ticket.azureWorkItem?.id ?? ticket.taskNumber, ticket])
     ).values());
@@ -1208,10 +1050,8 @@ export function Clients() {
     return {
       bugs,
       withTask,
-      pending,
       taskItems,
       taskStatuses: groupChartData(taskItems, (ticket) => taskStatusGroup(ticket), 6),
-      pendingStatuses: groupChartData(pending, (ticket) => ticket.justification?.trim() || ticket.status || "Sem motivo informado", 6),
       areas: groupChartData(scopedTickets, classifyExecutiveProcess, 8),
       bugAreas: groupChartData(bugs, classifyExecutiveProcess, 8),
     };
@@ -1221,69 +1061,20 @@ export function Clients() {
      PIZZA 2 - SITUAÇÃO DOS TICKETS
   ======================================================= */
 
-  const statusPieData =
-    useMemo<PieDataItem[]>(() => {
-      const newTickets =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "New"
-        ).length;
-
-      const attendance =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "InAttendance"
-        ).length;
-
-      const stopped =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-            "Stopped"
-        ).length;
-
-      const resolved =
-        scopedTickets.filter(
-          (ticket) =>
-            ticket.baseStatus ===
-              "Resolved" ||
-            ticket.baseStatus ===
-              "Closed"
-        ).length;
-
-      return [
-        {
-          name: "Novos",
-          value:
-            newTickets,
-        },
-        {
-          name:
-            "Em Atendimento",
-          value:
-            attendance,
-        },
-        {
-          name: "Parados",
-          value:
-            stopped,
-        },
-        {
-          name:
-            "Resolvidos",
-          value:
-            resolved,
-        },
-      ].filter(
-        (item) =>
-          item.value > 0
-      );
-    }, [scopedTickets]);
-
-  const visibleStatusPieData = useMemo(() => statusPieData.filter((item) => !hiddenStatusSlices.has(item.name)), [statusPieData, hiddenStatusSlices]);
-  const statusChartData = visibleStatusPieData.length > 0 ? visibleStatusPieData : statusPieData;
+  // Todos os status são contados, inclusive cancelados ou não padronizados.
+  // A soma das fatias precisa coincidir com o universo de abertura exibido.
+  const statusPieData = useMemo<PieDataItem[]>(()=>{
+    const count=(states:string[])=>scopedTickets.filter(t=>states.includes(t.baseStatus??"")).length;
+    const base=[
+      {name:"Novos",value:count(["New"])},
+      {name:"Em Atendimento",value:count(["InAttendance"])},
+      {name:"Parados",value:count(["Stopped"])},
+      {name:"Resolvidos",value:count(["Resolved","Closed"])},
+    ];
+    const other=scopedTickets.length-base.reduce((sum,row)=>sum+row.value,0);
+    if(other>0)base.push({name:"Outras situações",value:other});
+    return base.filter(row=>row.value>0);
+  },[scopedTickets]);
 
   /* =======================================================
      DRILL-DOWN
@@ -1516,6 +1307,27 @@ export function Clients() {
     );
   }
 
+  function inspectCategoryMonth(month:string,categoryKey?:string) {
+    const cutoff=endOfDay(effectiveEndDate);
+    const rows=clientOperationalTickets.filter(t=>{
+      const d=new Date(t.createdDate);
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      const category=t.category?.trim()||"Sem categoria";
+      return key===month&&d<=cutoff&&(!categoryKey||(categoryKey==="Outros"?!monthlyCategoryTrend.types.filter(x=>x!=="Outros").includes(category):category===categoryKey));
+    });
+    showTickets(`Atendimentos em ${month}${categoryKey?" · "+categoryKey:""}`,rows);
+  }
+  function inspectPerformanceMonth(month:string,key?:string) {
+    const period=monthlyPerformance.find(p=>p.periodo===month);if(!period)return;
+    const within=(raw:string|null)=>{const d=Date.parse(raw??"");return Number.isFinite(d)&&d>=period.start.getTime()&&d<period.finish.getTime();};
+    const created=clientOperationalTickets.filter(t=>within(t.createdDate));
+    const resolved=clientOperationalTickets.filter(t=>within(t.resolvedDate));
+    const response=calculateTimestampSla(created,"response").measuredTickets;
+    const solution=calculateTimestampSla(resolved,"solution").measuredTickets;
+    const rows=key==="resposta"?response:key==="solucao"?solution:key==="resolucao"?created:[...new Map([...created,...resolved].map(t=>[t.id,t])).values()];
+    showTickets(`Desempenho em ${month}${key?" · "+key:""}`,rows);
+  }
+
   /* =======================================================
      RENDER
   ======================================================= */
@@ -1525,100 +1337,22 @@ export function Clients() {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 9mm; }
-          html, body.client-pdf-export {
-            background: #ffffff !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+          html, body.client-pdf-export { background: white !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           body.client-pdf-export .MuiDrawer-root,
           body.client-pdf-export #global-user-controls,
           body.client-pdf-export main > div:first-of-type,
-          body.client-pdf-export .presentation-actions,
-          body.client-pdf-export .client-print-hidden {
-            display: none !important;
-          }
-          body.client-pdf-export main > div:last-child > :not(#client-export-content) {
-            display: none !important;
-          }
-          body.client-pdf-export #client-export-content {
-            display: block !important;
-            width: 100% !important;
-            margin: 0 !important;
-          }
-          body.client-pdf-export main {
-            padding: 0 !important;
-            margin: 0 !important;
-            min-height: auto !important;
-            overflow: visible !important;
-            background: #ffffff !important;
-          }
-          body.client-pdf-export main > div:last-child {
-            width: 100% !important;
-            max-width: none !important;
-          }
-          body.client-pdf-export .MuiCard-root,
-          body.client-pdf-export .MuiPaper-root {
-            break-inside: avoid;
-            box-shadow: none !important;
-          }
-          body.client-pdf-export #client-export-content {
-            border: 0 !important;
-            border-radius: 0 !important;
-            color: #111827 !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type {
-            min-height: 108px !important;
-            display: flex !important;
-            justify-content: center !important;
-            text-align: center !important;
-            background: #d1fae5 !important;
-            color: #064e3b !important;
-            border-radius: 12px !important;
-            margin-bottom: 12px !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiStack-root {
-            width: 100% !important;
-            justify-content: center !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiBox-root {
-            width: 100% !important;
-          }
-          body.client-pdf-export .client-print-kpi-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 8px !important;
-          }
-          body.client-pdf-export .client-print-section-grid {
-            grid-template-columns: 1fr !important;
-            align-content: start !important;
-            gap: 10px !important;
-          }
-          body.client-pdf-export .client-print-page {
-            break-before: page;
-            break-inside: avoid;
-            width: 100% !important;
-            min-height: 0 !important;
-            padding-top: 3mm !important;
-          }
-          body.client-pdf-export .client-print-page .recharts-responsive-container {
-            width: 100% !important;
-            min-width: 0 !important;
-          }
-          body.client-pdf-export .client-print-page svg {
-            max-width: 100% !important;
-            overflow: visible !important;
-          }
-          body.client-pdf-export .client-print-page-title {
-            grid-column: 1 / -1 !important;
-            text-align: center !important;
-            margin: 0 0 8px !important;
-          }
-          body.client-pdf-export .client-print-conclusion {
-            grid-column: 1 / -1 !important;
-          }
-          body.client-pdf-export .client-print-continuation {
-            break-before: auto !important;
-            padding-top: 0 !important;
-          }
+          body.client-pdf-export .client-print-hidden,
+          body.client-pdf-export button { display: none !important; }
+          body.client-pdf-export main { margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+          body.client-pdf-export main > div:last-child { width: 100% !important; max-width: none !important; }
+          body.client-pdf-export .techlead-executive-clients { width: 100% !important; max-width: none !important; color: #111827; }
+          body.client-pdf-export .MuiCard-root { box-shadow: none !important; overflow: visible !important; }
+          body.client-pdf-export [data-kpi-grid] { grid-template-columns: repeat(3,minmax(0,1fr)) !important; gap: 8px !important; }
+          body.client-pdf-export [data-kpi-card] { break-inside: avoid; }
+          body.client-pdf-export .client-print-page { break-inside: auto; margin-top: 12px; }
+          body.client-pdf-export .recharts-responsive-container { break-inside: avoid; }
+          body.client-pdf-export svg { max-width: 100% !important; overflow: visible !important; }
+          body.client-pdf-export .MuiTableContainer-root { overflow: visible !important; max-height: none !important; }
         }
       `}</style>
       {/* =================================================
@@ -1638,256 +1372,148 @@ export function Clients() {
             title={selectedClient || "Clientes"}
             description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
             meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
-            action={<PeriodFilter />}
+            action={<Button className="client-print-hidden" variant="contained" startIcon={<PictureAsPdfOutlined/>}
+              disabled={exportingPresentation} onClick={()=>void exportClientPresentation()}>
+              {exportingPresentation?"Gerando PDF...":"Exportar PDF"}
+            </Button>}
           />
         </Box>
       </Stack>
 
-      <PublicClientEnrichment />
 
-      {/* =================================================
-          FILTROS
-      ================================================= */}
-
-      <Card
-        elevation={0}
-        sx={{
-          border:
-            "1px solid",
-
-          borderColor:
-            "divider",
-
-          borderRadius:
-            2.25,
-
-          mb:
-            2,
-
-          backgroundColor:
-            "background.paper",
-
-          boxShadow:
-            "0 1px 2px rgba(16,24,40,0.035)",
-        }}
-      >
-        <CardContent
-          sx={{
-            py: 1.5,
-            px: 2,
-
-            "&:last-child": {
-              pb: 1.5,
+      {/* Seleção rápida do cliente; critérios adicionais permanecem disponíveis sem ocupar a tela. */}
+      <Card className="client-print-hidden" elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:2.5,mb:2}}>
+        <CardContent sx={{px:{xs:2,md:2.5},py:1.75,"&:last-child":{pb:1.75}}}>
+          <Box sx={{
+            display:"grid",
+            gridTemplateColumns:{
+              xs:"minmax(0,1fr)",
+              md:"minmax(240px, .85fr) minmax(0, 1.15fr)",
+              xl:"minmax(260px, .8fr) minmax(0, 1.2fr)"
             },
-          }}
-        >
-          <Stack
-            spacing={0}
-            sx={{
-              width: "100%",
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "minmax(0, 1fr)",
-                md: "repeat(2, minmax(0, 1fr))",
-                lg: "repeat(2, minmax(0, 1fr))",
-                xl: "repeat(3, minmax(0, 1fr))",
-              },
-              gap: 1.5,
-              "& .MuiFormControl-root": { width: "100%", minWidth: 0 },
-              "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)" },
-              "& .MuiSelect-select": { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-              alignItems: {
-                xs: "stretch",
-                md: "center",
-              },
-            }}
-          >
-            <Box sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "baseline", gap: 1.25, flexWrap: "wrap" }}>
-              <Typography
-        sx={{
-          fontWeight: 800,
-                  fontSize:
-                    "1rem",
-                }}
-              >
-                Visão dos clientes
+            gap:{xs:1.4,md:1.7},alignItems:"end",minWidth:0
+          }}>
+            <Box sx={{minWidth:0,width:"100%",maxWidth:{xs:"100%",xl:620}}}>
+              <Typography component="label" htmlFor="clients-client-selector" variant="caption"
+                color="text.secondary" sx={{display:"block",mb:.45,ml:.15,fontSize:".7rem",fontWeight:700,lineHeight:1.2}}>
+                Cliente da carteira SIMER
               </Typography>
-
-              <Typography variant="caption" color="text.secondary">
-                Refine a carteira por cliente, classificação e responsabilidade atual
-              </Typography>
+              <Autocomplete
+                id="clients-client-selector"
+                sx={{"& .MuiOutlinedInput-root":{minHeight:40,borderRadius:"8px",bgcolor:"background.paper"}}}
+                fullWidth size="small" options={clientOptions}
+                value={selectedClient||null}
+                onChange={(_,value)=>setSelectedClient(value??"")}
+                noOptionsText="Nenhum cliente da carteira encontrado"
+                clearText="Limpar cliente"
+                openText="Mostrar clientes"
+                closeText="Fechar clientes"
+                slotProps={{paper:{sx:{maxWidth:"min(94vw,640px)","& .MuiAutocomplete-option":{whiteSpace:"normal",overflowWrap:"anywhere"}}}}}
+                renderInput={params=><TextField {...params}
+                  placeholder="Pesquise ou selecione um cliente"/>}
+              />
             </Box>
-
-            {/* CLIENTE */}
-
-            <FormControl
-              size="small"
-              sx={{
-                minWidth: 0,
-              }}
-            >
-              <InputLabel shrink id="clients-select-1-label">Cliente</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os clientes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-1-label" inputProps={{ id: "clients-select-1", "aria-labelledby": "clients-select-1-label" }}
-                value={
-                  selectedClient
-                }
-                label="Cliente"
-                onChange={(
-                  event
-                ) =>
-                  setSelectedClient(
-                    event.target
-                      .value
-                  )
-                }
-              >
-                <MenuItem value="">
-                  Todos os clientes
-                </MenuItem>
-
-                {clientOptions.map(
-                  (client) => (
-                    <MenuItem
-                      key={
-                        client
-                      }
-                      value={
-                        client
-                      }
-                    >
-                      {
-                        client
-                      }
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-            </FormControl>
-
-            {/* CATEGORIA */}
-
-            <FormControl
-              size="small"
-              sx={{
-                minWidth: 0,
-              }}
-            >
-              <InputLabel shrink id="clients-select-2-label">Categoria</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as categorias"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-2-label" inputProps={{ id: "clients-select-2", "aria-labelledby": "clients-select-2-label" }}
-                value={
-                  category
-                }
-                label="Categoria"
-                onChange={(
-                  event
-                ) =>
-                  setCategory(
-                    event.target
-                      .value
-                  )
-                }
-              >
-                <MenuItem value="">
-                  Todas as categorias
-                </MenuItem>
-
-                {categories.map(
-                  (item) => (
-                    <MenuItem
-                      key={item}
-                      value={item}
-                    >
-                      {item}
-                    </MenuItem>
-                  )
-                )}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-3-label">Status</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os status"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-3-label" inputProps={{ id: "clients-select-3", "aria-labelledby": "clients-select-3-label" }} value={status} label="Status" onChange={(event) => setStatus(event.target.value)}>
-                <MenuItem value="">Todos os status</MenuItem>
-                {statuses.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-4-label">Responsável</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todos os responsáveis"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-4-label" inputProps={{ id: "clients-select-4", "aria-labelledby": "clients-select-4-label" }} value={owner} label="Responsável" onChange={(event) => setOwner(event.target.value)}>
-                <MenuItem value="">Todos os responsáveis</MenuItem>
-                {owners.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-5-label">Área de negócio</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as áreas"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-5-label" inputProps={{ id: "clients-select-5", "aria-labelledby": "clients-select-5-label" }} value={businessArea} label="Área de negócio" onChange={(event) => setBusinessArea(event.target.value)}>
-                <MenuItem value="">Todas as áreas</MenuItem>
-                {businessAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 0 }}>
-              <InputLabel shrink id="clients-select-6-label">Frente de atendimento</InputLabel><Select notched displayEmpty renderValue={(value) => value || "Todas as frentes"} MenuProps={{ sx: { "& .MuiPaper-root": { maxWidth: "min(640px, calc(100vw - 32px))" }, "& .MuiMenuItem-root": { whiteSpace: "normal", overflowWrap: "anywhere" } } }} labelId="clients-select-6-label" inputProps={{ id: "clients-select-6", "aria-labelledby": "clients-select-6-label" }} value={executiveArea} label="Frente de atendimento" onChange={(event) => setExecutiveArea(event.target.value)}>
-                <MenuItem value="">Todas as frentes</MenuItem>
-                {executiveAreas.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
-              </Select>
-            </FormControl>
-
-            {(selectedClient ||
-              category || status || owner || businessArea || executiveArea) && (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={
-                  clearFilters
-                }
-                sx={{
-                  minHeight: 40,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Limpar filtros
+            <Box sx={{minWidth:0,alignSelf:"end"}}>
+              <PeriodFilter />
+            </Box>
+            <Stack direction="row" sx={{alignItems:"center",gridColumn:{md:"1 / -1"},justifyContent:"flex-end",gap:1,flexWrap:"wrap",pb:{xs:0,md:.25}}}>
+              <Button size="small" variant={advancedFiltersOpen?"contained":"outlined"}
+                onClick={()=>setAdvancedFiltersOpen(value=>!value)}
+                endIcon={<ExpandMoreOutlined sx={{transform:advancedFiltersOpen?"rotate(180deg)":"none",transition:"transform .2s"}}/>}
+                aria-expanded={advancedFiltersOpen} aria-controls="clients-advanced-filters"
+                sx={{textTransform:"none",fontWeight:700,minHeight:40}}>
+                {advancedFiltersOpen?"Ocultar filtros":"Mais filtros"}
+                {[category,status,owner,businessArea,executiveArea].filter(Boolean).length>0
+                  ? " ("+[category,status,owner,businessArea,executiveArea].filter(Boolean).length+" ativos)" : ""}
               </Button>
-            )}
-          </Stack>
+              {(selectedClient||category||status||owner||businessArea||executiveArea)&&
+                <Button size="small" variant="text" onClick={clearFilters} sx={{textTransform:"none",minHeight:40}}>Limpar tudo</Button>}
+            </Stack>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{display:"block",mt:.7,ml:.35}}>
+            {selectedClient?"Exibindo somente os atendimentos de "+selectedClient:"Exibindo a carteira SIMER; selecione um cliente para apresentar seus resultados."}
+          </Typography>
+          {!advancedFiltersOpen&&[category,status,owner,businessArea,executiveArea].some(Boolean)&&
+            <Stack direction="row" sx={{gap:.5,flexWrap:"wrap",mt:1}}>
+              {[
+                ["Categoria",category,()=>setCategory("")],
+                ["Status",status,()=>setStatus("")],
+                ["Responsável",owner,()=>setOwner("")],
+                ["Área",businessArea,()=>setBusinessArea("")],
+                ["Frente",executiveArea,()=>setExecutiveArea("")],
+              ].filter(([,value])=>Boolean(value)).map(([label,value,reset])=>
+                <Chip key={String(label)} size="small" variant="outlined" label={String(label)+": "+String(value)}
+                  onDelete={reset as ()=>void} sx={{maxWidth:320}}/>)}
+            </Stack>}
+          <Collapse in={advancedFiltersOpen} unmountOnExit>
+            <Box id="clients-advanced-filters"
+              sx={{display:"grid",gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))"},
+                gap:1.5,pt:2,mt:1.5,borderTop:"1px solid",borderColor:"divider"}}>
+              <TextField size="small" select fullWidth label="Categoria" value={category} onChange={e=>setCategory(e.target.value)}>
+                <MenuItem value="">Todas as categorias</MenuItem>
+                {categories.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Status" value={status} onChange={e=>setStatus(e.target.value)}>
+                <MenuItem value="">Todos os status</MenuItem>
+                {statuses.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Responsável" value={owner} onChange={e=>setOwner(e.target.value)}>
+                <MenuItem value="">Todos os responsáveis</MenuItem>
+                {owners.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Área de negócio" value={businessArea} onChange={e=>setBusinessArea(e.target.value)}>
+                <MenuItem value="">Todas as áreas</MenuItem>
+                {businessAreas.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <TextField size="small" select fullWidth label="Frente de atendimento" value={executiveArea} onChange={e=>setExecutiveArea(e.target.value)}>
+                <MenuItem value="">Todas as frentes</MenuItem>
+                {executiveAreas.map(item=><MenuItem key={item} value={item}>{item}</MenuItem>)}
+              </TextField>
+              <Box sx={{display:"flex",alignItems:"center"}}>
+                <Button size="small" variant="outlined" disabled={![category,status,owner,businessArea,executiveArea].some(Boolean)}
+                  onClick={()=>{setCategory("");setStatus("");setOwner("");setBusinessArea("");setExecutiveArea("");}}
+                  sx={{textTransform:"none"}}>Limpar filtros adicionais</Button>
+              </Box>
+            </Box>
+          </Collapse>
         </CardContent>
       </Card>
 
+      {/* Pacote gerencial — análise semanal, comparativos e estoque de pendentes públicos */}
+      <ClientMeetingInsights analysis={meetingAnalytics} tickets={clientOperationalTickets}
+        selectedClient={selectedClient}
+        onShowTickets={(title,ids,subtitle)=>{
+          const selected=new Set(ids);
+          showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
+        }}/>
+      
+      <ClientDeliveryInsights tickets={clientOperationalTickets}
+        start={startOfDay(effectiveStartDate)} end={endOfDay(effectiveEndDate)}
+        onShowTickets={(title,ids)=>{const selected=new Set(ids);showTickets(title,clientOperationalTickets.filter(t=>selected.has(t.id)));}}/>
+
+      <Card component="section" elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:3}}>
+        <Box sx={{px:2.3,py:2}}>
+          <Box>
+            <Typography sx={{fontWeight:800}}>Detalhamento operacional e histórico</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Análise do intervalo selecionado, categorias, riscos e desenvolvimento vinculado
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{pt:0,px:{xs:1.5,md:2}}}>
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
-      <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(4, minmax(0, 1fr))" } }}>
-        <MetricCard title="Abertos no período · SIMER" value={clientOperationalCohorts.entries.length} description="Abertura no intervalo"
-          info={{ title: "Abertos no período · SIMER", summary: "Abertura no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.createdDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
-          onClick={() => showTickets("Abertos no período · SIMER", clientOperationalCohorts.entries, "Abertura no intervalo")} />
-        <MetricCard title="Backlog atual · SIMER" value={clientOperationalCohorts.backlog.length} description="Pendências inclusive de períodos anteriores"
-          info={{ title: "Backlog atual · SIMER", summary: "Pendências inclusive de períodos anteriores", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.baseStatus", periodRule: "Fotografia atual, inclusive tickets abertos antes do período." }}
-          onClick={() => showTickets("Backlog atual · SIMER", clientOperationalCohorts.backlog, "Pendências inclusive de períodos anteriores")} />
-        <MetricCard title="Resolvidos no período" value={clientOperationalCohorts.resolved.length} description="Resolução no intervalo"
-          info={{ title: "Resolvidos no período", summary: "Resolução no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.resolvedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
-          onClick={() => showTickets("Resolvidos no período", clientOperationalCohorts.resolved, "Resolução no intervalo")} />
+      <Box className="clients-closure-summary" sx={{display:"grid",gridTemplateColumns:{xs:"minmax(0,1fr)",md:"minmax(280px,360px) minmax(0,1fr)"},gap:2,mb:2,alignItems:"center"}}>
         <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
           info={{ title: "Fechados no período", summary: "Fechamento no intervalo", calculation: "Contagem de tickets únicos com os mesmos critérios de data e escopo do Dashboard.", source: "Movidesk", reference: "Ticket.closedDate", periodRule: "Evento ocorrido dentro do período selecionado." }}
           onClick={() => showTickets("Fechados no período", clientOperationalCohorts.closed, "Fechamento no intervalo")} />
-      </KpiGrid>
-      <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
-        <CardContent>
-          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal de abertos, resolvidos e encerrados</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Últimos seis meses até o período selecionado, pela data de cada evento. Os cards acima continuam seguindo o filtro de período.
+      <Box sx={{minWidth:0,px:{xs:0,md:1}}}>
+          <Typography sx={{fontWeight:800,mb:.5}}>Encerramentos administrativos</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{lineHeight:1.65}}>
+            {clientOperationalCohorts.closed.length} atendimento(s) encerrado(s) entre {effectiveStartDate.toLocaleDateString("pt-BR")} e {effectiveEndDate.toLocaleDateString("pt-BR")}.
+            O encerramento pode ocorrer após a resolução. Esses volumes não devem ser somados como atendimentos distintos.
           </Typography>
-          <Box sx={{ width: "100%", height: 300 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={movementSeries} margin={{ top: 10, right: 18, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                <XAxis dataKey="periodo" minTickGap={22} tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} width={38} />
-                <Tooltip />
-                <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), 3, setHiddenMovementLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenMovementLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
-                <Line type="linear" dataKey="abertos" hide={hiddenMovementLines.has("abertos")} name="Abertos" stroke={semanticChartColors.normal} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="linear" dataKey="resolvidos" hide={hiddenMovementLines.has("resolvidos")} name="Resolvidos" stroke={semanticChartColors.positive} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-                <Line type="linear" dataKey="encerrados" hide={hiddenMovementLines.has("encerrados")} name="Encerrados" stroke={semanticChartColors.attention} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Box>
-        </CardContent>
-      </Card>
-
+        </Box>
+      </Box>
       <Card elevation={0} sx={{ mb: 2, border: "1px solid", borderColor: "divider", borderRadius: 2.5 }}>
         <CardContent>
           <Typography sx={{ fontWeight: 800, mb: 0.5 }}>Evolução mensal por tipo de atendimento</Typography>
@@ -1899,15 +1525,17 @@ export function Clients() {
           ) : (
             <Box sx={{ width: "100%", height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyCategoryTrend.rows} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
+                <LineChart data={monthlyCategoryTrend.rows} onClick={state=>{if(state.activeLabel)inspectCategoryMonth(String(state.activeLabel));}} margin={{ top: 10, right: 16, left: 0, bottom: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                   <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} width={38} />
                   <Tooltip />
-                  <Legend onClick={(entry) => toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines)} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
+                  <Legend onClick={(entry,_index,event) => {event.stopPropagation();toggleLine(String(entry.dataKey ?? ""), monthlyCategoryTrend.types.length, setHiddenCategoryLines);}} formatter={(value, entry) => <span style={{ cursor: "pointer", opacity: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? 0.38 : 1, textDecoration: hiddenCategoryLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>{value}</span>} />
                   {monthlyCategoryTrend.types.map((type, index) => (
                     <Line key={type} type="linear" dataKey={type} hide={hiddenCategoryLines.has(type)} name={type}
-                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                      stroke={PIE_COLORS[index % PIE_COLORS.length]} strokeWidth={2.5} activeDot={false}
+                      dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill={PIE_COLORS[index % PIE_COLORS.length]} style={{cursor:"pointer"}}
+                        onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectCategoryMonth(props.payload.periodo,type);}}/>} />
                   ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -1975,8 +1603,8 @@ export function Clients() {
 
       </KpiGrid>
       <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 2 }}>
-        <StatusPill tone={clientRiskSummary.high ? "error" : "neutral"} label={`${clientRiskSummary.high} cliente(s) com risco agregado alto`} />
-        <StatusPill tone={clientRiskSummary.moderate ? "warning" : "neutral"} label={`${clientRiskSummary.moderate} cliente(s) em atenção`} />
+        <StatusPill tone={clientRiskSummary.high ? "error" : "neutral"} label={`${clientRiskSummary.high} cliente(s) com risco alto no período`} />
+        <StatusPill tone={clientRiskSummary.moderate ? "warning" : "neutral"} label={`${clientRiskSummary.moderate} cliente(s) em atenção no período`} />
         <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>Risco agregado por cliente não equivale à quantidade de tickets críticos.</Typography>
       </Stack>
 
@@ -1984,43 +1612,47 @@ export function Clients() {
         <CardContent>
           <Typography sx={{ fontWeight: 800 }}>Tendência mensal de desempenho</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Últimos seis meses até a data final selecionada. Variações em pontos percentuais (p.p.) frente ao mês anterior; sem medição não equivale a zero.
+            Últimos seis meses até o corte selecionado. O mês anterior é comparado até o mesmo dia, quando o mês atual está incompleto; sem medição não equivale a zero.
           </Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, minmax(0, 1fr))" }, gap: 1.5, mb: 2 }}>
             {performanceDeltas.map((metric) => (
-              <Box key={metric.label} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2, px: 2, py: 1.5, minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary">{metric.label}</Typography>
-                <Typography sx={{ fontWeight: 800, fontSize: "1.35rem" }}>{metric.value === null ? "Sem medição" : `${metric.value.toFixed(1)}%`}</Typography>
-                <Typography variant="caption" color={metric.difference == null ? "text.secondary" : metric.difference >= 0 ? "success.main" : "error.main"}>
-                  {metric.difference === null ? "Comparação indisponível" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>{metric.measured} ticket(s) no denominador</Typography>
-              </Box>
+              <ExecutiveKpiCard key={metric.label} title={metric.label}
+                value={metric.value === null ? "N/D" : `${metric.value.toFixed(1)}%`}
+                subtitle={`${metric.measured} ticket(s) medidos • ${metric.difference === null ? "Sem comparação" : `${metric.difference > 0 ? "+" : ""}${metric.difference.toFixed(1)} p.p. versus mês anterior`}`}
+                info="Comparação dos indicadores mensais. Valores sem medição ficam fora do denominador; a taxa da coorte considera a situação atual dos tickets abertos no mês."
+                accent={aliareColors.green}/>
+
             ))}
           </Box>
           <Box sx={{ height: 300, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyPerformance} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
+              <LineChart data={monthlyPerformance} onClick={state=>{if(state.activeLabel)inspectPerformanceMonth(String(state.activeLabel));}} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
                 <XAxis dataKey="periodo" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} width={46} />
                 <Tooltip formatter={(value) => { const scalar = Array.isArray(value) ? value[0] : value; return scalar == null || !Number.isFinite(Number(scalar)) ? "Sem medição" : `${Number(scalar).toFixed(1)}%`; }} />
                 <Legend
-                  onClick={(entry) => togglePerformanceLine(String(entry.dataKey ?? ""))}
+                  onClick={(entry,_index,event) => {event.stopPropagation();togglePerformanceLine(String(entry.dataKey ?? ""));}}
                   formatter={(value, entry) => (
                     <span style={{ cursor: "pointer", opacity: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? 0.4 : 1, textDecoration: hiddenPerformanceLines.has(String(entry.dataKey ?? "")) ? "line-through" : "none" }}>
                       {value}
                     </span>
                   )}
                 />
-                <Line type="linear" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} />
-                <Line type="linear" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} />
-                <Line type="linear" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} />
+                <Line type="linear" dataKey="resposta" name="SLA 1ª resposta" stroke={PIE_COLORS[0]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resposta")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"resposta");}}/>} />
+                <Line type="linear" dataKey="solucao" name="SLA solução" stroke={PIE_COLORS[1]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("solucao")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"solucao");}}/>} />
+                <Line type="linear" dataKey="resolucao" name="Taxa de resolução" stroke={PIE_COLORS[2]} strokeWidth={2.5} connectNulls={false} hide={hiddenPerformanceLines.has("resolucao")} activeDot={false}
+                  dot={(props:{cx?:number;cy?:number;payload?:{periodo?:string}})=><circle cx={props.cx} cy={props.cy} r={5} fill="currentColor" style={{cursor:"pointer"}}
+                    onClick={event=>{event.stopPropagation();if(props.payload?.periodo)inspectPerformanceMonth(props.payload.periodo,"resolucao");}}/>} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos. Taxa de resolução: abertos naquele mês que estão resolvidos ou fechados na data atual.
+            SLA de resposta: tickets abertos no mês com prazos medidos. SLA de solução: tickets resolvidos no mês com prazos medidos (inclusive reabertos posteriormente). Taxa de resolução da coorte: abertos naquele mês que estão resolvidos ou fechados no snapshot atual; não representa o percentual que já estava resolvido naquele mês.
           </Typography>
         </CardContent>
       </Card>
@@ -2034,7 +1666,7 @@ export function Clients() {
           <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5}
             sx={{ justifyContent: "space-between", alignItems: { xs: "stretch", lg: "center" }, mb: 1.5 }}>
             <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Resumo Executivo</Typography>
+              <Typography sx={{ fontWeight: 800, fontSize: "1.05rem" }}>Indicadores complementares do intervalo</Typography>
               <Typography variant="caption" color="text.secondary">
                 Indicadores para análise interna e apresentação de resultados ao cliente
               </Typography>
@@ -2042,7 +1674,7 @@ export function Clients() {
             <Chip size="small" variant="outlined" label={selectedClient || `${summary.totalClients} cliente(s) na carteira`} />
           </Stack>
 
-          <KpiGrid className="client-print-kpi-grid">
+          <KpiGrid className="client-print-kpi-grid" sx={{gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))"}}}>
             <ExecutiveMetric
               title="Taxa de resolução"
               value={`${portfolioSummary.resolutionRate}%`}
@@ -2056,41 +1688,6 @@ export function Clients() {
                 periodRule: "Respeita período, cliente e categoria selecionados.",
               }}
               onClick={() => showStatusTickets("resolved")}
-            />
-            <ExecutiveMetric
-              title="SLA 1ª resposta"
-              value={formatSlaPercent(portfolioSummary.responseSla.percent)}
-              description={portfolioSummary.responseSla.measured ? `${portfolioSummary.responseSla.onTime} de ${portfolioSummary.responseSla.measured} medidos no prazo` : "Sem medição no recorte"}
-              info={{
-                title: "SLA 1ª resposta",
-                summary: "Percentual de tickets com primeira resposta concluída até o prazo informado.",
-                calculation: "Medições no prazo ÷ medições válidas × 100.",
-                source: "Movidesk",
-                reference: "firstResponseDate ≤ firstResponseDueDate",
-                periodRule: "SLA de solução usa tickets resolvidos no período; itens sem os timestamps necessários ficam fora do denominador.",
-              }}
-              onClick={() => showTickets("SLA 1ª resposta - tickets medidos", scopedTickets.filter((ticket) => Boolean(ticket.firstResponseDate && ticket.firstResponseDueDate)), "Tickets com timestamps suficientes para medição")}
-            />
-            <ExecutiveMetric
-              title="SLA solução"
-              value={formatSlaPercent(portfolioSummary.solutionSla.percent)}
-              description={portfolioSummary.solutionSla.measured ? `${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos no prazo` : "Sem medição no recorte"}
-              info={{
-                title: "SLA solução",
-                summary: "Percentual de tickets concluídos até o prazo de solução informado.",
-                calculation: "Medições no prazo ÷ medições válidas × 100.",
-                source: "Movidesk",
-                reference: "resolvedDate/closedDate ≤ dueDate",
-                periodRule: "Usa a data de resolução para pertencer ao período; itens sem os timestamps necessários ficam fora do denominador.",
-              }}
-              onClick={() => showTickets("SLA solução - tickets medidos", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets, "Tickets com timestamps suficientes para medição")}
-            />
-            <ExecutiveMetric
-              title="CSAT"
-              value={portfolioSummary.csat.average == null ? "—" : portfolioSummary.csat.average.toLocaleString("pt-BR",{maximumFractionDigits:2})}
-              description={`${portfolioSummary.csat.responses} avaliação(ões) no recorte`}
-              info={{ title:"CSAT", summary:"Média das avaliações de satisfação vinculadas aos atendimentos do cliente.", calculation:"Média das notas da Pesquisa de Satisfação Movidesk.", source:"Pesquisa de Satisfação Movidesk", reference:"MovideskSurveyResponse → Ticket.movideskId", periodRule:"Respeita os filtros e período atuais." }}
-              onClick={()=>showTickets("Tickets com avaliação CSAT", scopedTickets.filter((ticket)=>ticket.satisfactionScore != null), "Pesquisa de Satisfação Movidesk")}
             />
             <ExecutiveMetric
               title="Desenvolvimento"
@@ -2122,48 +1719,27 @@ export function Clients() {
         </CardContent>
       </Card>
 
-      {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
-      {selectedClient && (
-        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100dvh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
-          <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-              <Box>
-                <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
-                <Typography sx={{ fontSize: { xs: "1.35rem", md: isPresenting ? "2.15rem" : "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
-                <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
-                  {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
-                </Typography>
-              </Box>
-              <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 5</Typography>}
-                {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
-                  {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
-                </Button>}
-                <Button variant="contained" color="inherit" onClick={isPresenting ? () => void document.exitFullscreen() : () => void startPresentation()} startIcon={isPresenting ? <FullscreenExitOutlined /> : undefined} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
-                  {isPresenting ? "Sair da apresentação" : "Apresentar em tela cheia"}
-                </Button>
-              </Stack>
-            </Stack>
-          </Box>
+        </Box>
+      </Card>
 
-          <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
-            {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
-              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Resumo executivo</Typography>
+      <Box component="section" sx={{mb:2}}>
+      {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
+        <Box id="client-export-content" sx={{mb:2}}>
+          <CardContent sx={{ p: { xs: 1.5, md:2 }, display: "flex", flexDirection: "column" }}>
+            <Box sx={{ height:"auto", display: "flex", flexDirection: "column", justifyContent:"flex-start" }}>
+              <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Visão do intervalo selecionado</Typography>
               <KpiGrid className="client-print-kpi-grid" sx={{mb: 2}}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
-                <PresentationKpi title="Bugs" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
+                <PresentationKpi title="Categoria Bug" value={presentationSummary.bugs.length} detail={`${presentationSummary.bugs.filter((ticket) => ticket.azureWorkItem || ticket.taskNumber).length} com Task`} color="#008A68" onClick={() => showTickets("Bugs identificados", presentationSummary.bugs)} />
                 <PresentationKpi title="Com Task" value={presentationSummary.withTask.length} detail="correção, evolução ou apoio" color="#2676B9" onClick={() => showTickets("Atendimentos com Task", presentationSummary.withTask)} />
-                <PresentationKpi title="Pendências" value={presentationSummary.pending.length} detail="em acompanhamento" color="#B7791F" onClick={() => showTickets("Pendências ativas", presentationSummary.pending)} />
+                <PresentationKpi title="Backlog público atual" value={clientOperationalCohorts.backlog.length} detail="inclui tickets antigos" color="#B7791F" onClick={() => showTickets("Backlog público atual", clientOperationalCohorts.backlog)} />
                 <PresentationKpi title="SLA solução" value={formatSlaPercent(portfolioSummary.solutionSla.percent)} detail={`${portfolioSummary.solutionSla.onTime} de ${portfolioSummary.solutionSla.measured} medidos`} color="#159A68" onClick={() => showTickets("SLA solução", calculateTimestampSla(solutionScopedTickets, "solution").measuredTickets)} />
-                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)} detail={`${clients.find((item) => item.client === selectedClient)?.measuredResolutionTimes ?? 0} atendimento(s) medido(s)`} color="#7C3AED" onClick={() => showTickets("Atendimentos com tempo de solução", scopedTickets.filter((ticket) => ticketResolutionMinutes(ticket) !== null))} />
+                <PresentationKpi title="Tempo médio de solução" value={formatMinutes(solvedInPeriod.averageMinutes)} detail={`${solvedInPeriod.measured} resolvido(s) com tempo medido no período`} color="#7C3AED" onClick={() => showTickets("Resolvidos no período com tempo de solução", solvedInPeriod.tickets)} />
               </KpiGrid>
-              <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
-                <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
-              </Box>
-            </Box>}
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            </Box>
+
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
@@ -2172,485 +1748,98 @@ export function Clients() {
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>O processo com maior volume é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} atendimento(s). Entre os bugs, {presentationSummary.bugAreas[0]?.name ?? "nenhum processo"} concentra {presentationSummary.bugAreas[0]?.value ?? 0} ocorrência(s).</Typography>
                 <Typography sx={{ mt: 1.25, lineHeight: 1.65, color: "text.secondary" }}>Direcionamento: avaliar causa raiz, recorrência, necessidade de treinamento e oportunidade de correção preventiva nos processos mais representativos.</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
-              <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
+              <ExecutiveDonutPanel title="Status atual das Tasks vinculadas aos tickets abertos no intervalo" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
-                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>Vínculos de desenvolvimento do recorte de abertura</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) vinculadas aos tickets abertos no intervalo, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
-              <ExecutiveDonutPanel title="Status das pendências" data={presentationSummary.pendingStatuses} total={presentationSummary.pending.length} />
-              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: presentationSummary.pending.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: presentationSummary.pending.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
+              <ExecutiveDonutPanel title="Status das pendências públicas atuais" data={meetingAnalytics.pendingByStatus} total={meetingAnalytics.pendingNow.length} />
+              <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
-                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.pending.length ? `${presentationSummary.pending.length} pendência(s) permanecem ativas. ${presentationSummary.bugs.filter(isOpen).length} são bugs e ${presentationSummary.pending.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} aguardam ação ou retorno do cliente.` : "Não há pendências ativas no recorte selecionado."}</Typography>
+                <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{clientOperationalCohorts.backlog.length ? `${clientOperationalCohorts.backlog.length} ticket(s) público(s) permanecem pendentes no estoque atual, incluindo registros de meses anteriores. ${clientOperationalCohorts.backlog.filter(isBug).length} estão atualmente classificados como Bug e ${clientOperationalCohorts.backlog.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} possuem justificativa relacionada ao cliente.` : "Não há pendências públicas ativas na carteira selecionada."}</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
               <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
-                  Foram analisados {scopedTickets.length} atendimento(s) de {selectedClient}, com taxa de resolução de {portfolioSummary.resolutionRate.toFixed(1)}%, SLA de solução de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e tempo médio de solução de {formatMinutes(clients.find((item) => item.client === selectedClient)?.averageResolutionMinutes ?? null)}.
+                  Foram analisados {scopedTickets.length} ticket(s) abertos no recorte de {selectedClient || "toda a carteira SIMER"}, dos quais {portfolioSummary.resolutionRate.toFixed(1)}% estão atualmente resolvidos/fechados. Entre os tickets resolvidos no período, o SLA de solução medido foi de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e o tempo médio mensurável foi de {formatMinutes(solvedInPeriod.averageMinutes)} ({solvedInPeriod.measured} registros).
                 </Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
-                  O recorte possui {presentationSummary.pending.length} pendência(s), {presentationSummary.bugs.length} bug(s) e {presentationSummary.taskItems.length} Tarefa(s) relacionada(s). O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
+                  O cliente possui {meetingAnalytics.pendingNow.length} pendência(s) pública(s) no estoque atual; no período de abertura, {presentationSummary.bugs.length} ticket(s) estão atualmente classificados como Bug e {presentationSummary.taskItems.length} Tarefa(s) estão vinculadas. O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
                 </Typography>
                 <Typography variant="h6" sx={{ mt: 3, fontWeight: 900 }}>Recomendação</Typography>
                 <Typography sx={{ mt: 1, lineHeight: 1.75 }}>
-                  {presentationSummary.pending.length
-                    ? "Priorizar a revisão das pendências, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
+                  {meetingAnalytics.pendingNow.length
+                    ? "Priorizar a revisão das pendências públicas atuais, acompanhar as entregas com versão informada e atuar preventivamente nos processos de maior recorrência."
                     : "Manter o acompanhamento periódico da carteira e preservar as práticas que sustentam o resultado atual."}
                 </Typography>
               </Box>
-              <Box className="client-print-conclusion" sx={{ p: 2.5, borderRadius: 2, bgcolor: "rgba(0,138,104,.08)", border: "1px solid rgba(0,138,104,.25)" }}>
-                <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
-                <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
-              </Box>
-            </Box>}
 
-            {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
-              <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
-              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
-              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 4} onClick={() => setPresentationPage((page) => Math.min(4, page + 1))}>Próxima</Button>
-            </Stack>}
+            </Box>
+
           </CardContent>
-        </Card>
-      )}
-
-      {/* =================================================
-          GRÁFICOS
-      ================================================= */}
-
-      <Box
-        sx={{
-          display: "grid",
-
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
-
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        {/* Cliente usa a linha completa para acomodar nomes longos da carteira SIMER. */}
-        <Box sx={{ gridColumn: { xs: "auto", md: "1 / -1" }, minWidth: 0 }}>
-        <ChartCard
-          title="Distribuição por Cliente"
-          subtitle="Participação dos clientes no volume de chamados"
-        >
-          {clientPieData.length >
-          0 ? (
-            <Box
-              sx={{
-                display:
-                  "grid",
-
-                gridTemplateColumns:
-                  {
-                    xs: "1fr",
-                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
-                  },
-
-                gap: 1.5,
-
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  height: { xs: 215, sm: 225 },
-                  minWidth: 0,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <PieChart>
-                    <Pie
-                      data={clientChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={92}
-                      innerRadius={62}
-                      paddingAngle={2}
-                      cornerRadius={5}
-                      stroke={theme.palette.background.paper}
-                      strokeWidth={1.5}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const name =
-                          String(
-                            (
-                              data as {
-                                payload?: {
-                                  name?: unknown;
-                                };
-                              }
-                            ).payload?.name ??
-                              ""
-                          );
-
-                        if (
-                          !name ||
-                          name ===
-                            "Outros"
-                        ) {
-                          return;
-                        }
-
-                        const list =
-                          periodTickets.filter(
-                            (ticket) =>
-                              (ticket.client ??
-                                "Sem cliente") ===
-                                name &&
-                              (!category ||
-                                ticket.category ===
-                                  category)
-                          );
-
-                        showTickets(
-                          `Cliente: ${name}`,
-                          list,
-                          "Tickets que compõem esta participação"
-                        );
-                      }}
-                    >
-                      {clientChartData.map(
-                        (
-                          _,
-                          index
-                        ) => (
-                          <Cell
-                            key={`${clientPieData[index]?.name ?? "client"}-${index}`}
-                            fill={
-                              PIE_COLORS[
-                                index %
-                                  PIE_COLORS.length
-                              ]
-                            }
-                          />
-                        )
-                      )}
-                    </Pie>
-
-                    <Tooltip
-                      content={
-                        <CompactPieTooltip
-                          valueLabel="ticket(s)"
-                        />
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-
-              <CompactPieLegend
-                data={clientPieData}
-                hiddenItems={hiddenClientSlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenClientSlices, clientPieData, name)}
-                onItemClick={(
-                  name
-                ) => {
-                  if (
-                    name ===
-                    "Outros"
-                  ) {
-                    return;
-                  }
-
-                  const list =
-                    periodTickets.filter(
-                      (ticket) =>
-                        (ticket.client ??
-                          "Sem cliente") ===
-                          name &&
-                        (!category ||
-                          ticket.category ===
-                            category)
-                    );
-
-                  showTickets(
-                    `Cliente: ${name}`,
-                    list,
-                    "Tickets que compõem esta participação"
-                  );
-                }}
-              />
-            </Box>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
         </Box>
-
-        <ChartCard
-          title="Atendimentos por Categoria"
-          subtitle="Composição dos assuntos no recorte selecionado"
-        >
-          {categoryPieData.length ? (
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(190px,.9fr) minmax(0,1.1fr)" }, gap: 1, alignItems: "center" }}>
-              <Box sx={{ height: { xs: 215, sm: 225 }, minWidth: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={categoryChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={60} paddingAngle={2} cornerRadius={5} stroke={theme.palette.background.paper} strokeWidth={1.5} cursor="pointer"
-                      onClick={(data) => {
-                        const name = String((data as { payload?: { name?: unknown } }).payload?.name ?? "");
-                        if (name && name !== "Outros") showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name));
-                      }}>
-                      {categoryChartData.map((item, index) => <Cell key={`${item.name}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip content={<CompactPieTooltip valueLabel="ticket(s)" />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-              <CompactPieLegend data={categoryPieData}
-                hiddenItems={hiddenCategorySlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenCategorySlices, categoryPieData, name)}
-                onItemClick={(name) => name !== "Outros" && showTickets(`Categoria: ${name}`, scopedTickets.filter((ticket) => (ticket.category?.trim() || "Sem categoria") === name))} />
-            </Box>
-          ) : <EmptyChart />}
-        </ChartCard>
-
-        {/* SITUAÇÃO DOS TICKETS */}
-
-        <ChartCard
-          title="Situação dos Tickets"
-          subtitle="Composição operacional da carteira selecionada"
-        >
-          {statusPieData.length >
-          0 ? (
-            <Box
-              sx={{
-                display:
-                  "grid",
-
-                gridTemplateColumns:
-                  {
-                    xs: "1fr",
-                    sm: "minmax(220px, 0.9fr) minmax(0, 1.1fr)",
-                  },
-
-                gap: 1.5,
-
-                alignItems:
-                  "center",
-              }}
-            >
-              <Box
-                sx={{
-                  height: { xs: 215, sm: 225 },
-                  minWidth: 0,
-                }}
-              >
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <PieChart>
-                    <Pie
-                      data={statusChartData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={92}
-                      innerRadius={62}
-                      paddingAngle={2}
-                      cornerRadius={5}
-                      stroke={theme.palette.background.paper}
-                      strokeWidth={1.5}
-                      cursor="pointer"
-                      onClick={(data) => {
-                        const name =
-                          String(
-                            (
-                              data as {
-                                payload?: {
-                                  name?: unknown;
-                                };
-                              }
-                            ).payload?.name ??
-                              ""
-                          );
-
-                        if (
-                          name ===
-                          "Novos"
-                        ) {
-                          showStatusTickets(
-                            "new"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Em Atendimento"
-                        ) {
-                          showStatusTickets(
-                            "attendance"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Parados"
-                        ) {
-                          showStatusTickets(
-                            "stopped"
-                          );
-                        }
-
-                        if (
-                          name ===
-                          "Resolvidos"
-                        ) {
-                          showStatusTickets(
-                            "resolved"
-                          );
-                        }
-                      }}
-                    >
-                      {statusChartData.map(
-                        (
-                          _,
-                          index
-                        ) => (
-                          <Cell
-                            key={`${statusPieData[index]?.name ?? "status"}-${index}`}
-                            fill={
-                              STATUS_COLORS[
-                                statusPieData[
-                                  index
-                                ]?.name ??
-                                  ""
-                              ] ??
-                              PIE_COLORS[
-                                index %
-                                  PIE_COLORS.length
-                              ]
-                            }
-                          />
-                        )
-                      )}
-                    </Pie>
-
-                    <Tooltip
-                      content={
-                        <CompactPieTooltip
-                          valueLabel="ticket(s)"
-                        />
-                      }
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </Box>
-
-              <CompactPieLegend
-                data={statusPieData}
-                hiddenItems={hiddenStatusSlices}
-                onToggleItem={(name) => togglePieSlice(setHiddenStatusSlices, statusPieData, name)}
-                onItemClick={(
-                  name
-                ) => {
-                  if (
-                    name ===
-                    "Novos"
-                  ) {
-                    showStatusTickets(
-                      "new"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Em Atendimento"
-                  ) {
-                    showStatusTickets(
-                      "attendance"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Parados"
-                  ) {
-                    showStatusTickets(
-                      "stopped"
-                    );
-                  }
-
-                  if (
-                    name ===
-                    "Resolvidos"
-                  ) {
-                    showStatusTickets(
-                      "resolved"
-                    );
-                  }
-                }}
-              />
-            </Box>
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", xl: "minmax(0,1.35fr) minmax(340px,.65fr)" }, gap: 2, mb: 2 }}>
-        <ChartCard title="Volume por Responsável" subtitle="Distribuição da demanda entre os analistas no recorte · clique para investigar">
-          {ownerChartData.length ? (
-            <Box sx={{ mt: 1 }}>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mb: 1.25 }}>
-                <Chip size="small" variant="outlined" label={`${ownerChartData.length} responsável(is)`} />
-                <Chip size="small" variant="outlined" label={`${ownerChartData.reduce((sum, item) => sum + Number(item.value || 0), 0)} tickets distribuídos`} />
-                <Chip size="small" variant="outlined" label={`Maior carteira: ${ownerChartData[0]?.name ?? "—"} · ${ownerChartData[0]?.value ?? 0}`} />
-              </Stack>
-              <Box sx={{ height: Math.max(330, Math.min(540, ownerChartData.length * 54 + 70)), minWidth: 0 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ownerChartData} layout="vertical" barCategoryGap="28%" margin={{ top: 6, right: 54, bottom: 4, left: 8 }}>
-                    <CartesianGrid strokeDasharray="4 6" horizontal={false} stroke={theme.palette.divider} opacity={0.4} />
-                    <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="name" width={185} tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} tickFormatter={(value) => abbreviate(String(value), 27)} />
-                    <Tooltip formatter={(value) => [`${Number(value)} ticket(s)`, "Volume"]} labelFormatter={(label) => `Responsável: ${label}`} contentStyle={{ borderRadius: 12, border: `1px solid ${theme.palette.divider}`, background: theme.palette.background.paper, color: theme.palette.text.primary, boxShadow: "0 12px 32px rgba(0,0,0,.16)" }} labelStyle={{ color: theme.palette.text.primary, fontWeight: 800 }} cursor={{ fill: theme.palette.action.hover }} />
-                    <Bar dataKey="value" name="Tickets" fill={aliareColors.green} radius={[0, 7, 7, 0]} maxBarSize={28} cursor="pointer"
-                      label={{ position: "right", fill: theme.palette.text.secondary, fontSize: 11, fontWeight: 800 }}
-                      onClick={(data) => {
-                        const name = String((data as { name?: unknown }).name ?? "");
-                        if (name && name !== "Outros") showTickets(`Responsável: ${name}`, scopedTickets.filter((ticket) => (ticket.owner?.trim() || "Sem responsável") === name));
-                      }} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
-              <Typography variant="caption" color="text.secondary">Ordenado por volume no período. O número ao final de cada barra representa a quantidade de tickets da carteira do responsável.</Typography>
-            </Box>
-          ) : <EmptyChart />}
-        </ChartCard>
-
-        <ChartCard title="Insights do Período" subtitle="Leituras automáticas para apoiar a apresentação executiva">
-          <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2,minmax(0,1fr))", xl: "1fr" }, gap: 1.25 }}>
-            {executiveInsights.map((insight, index) => (
-              <Box key={insight} sx={{ display: "flex", gap: 1.2, p: 1.2, borderRadius: 1.5, bgcolor: index === 2 && portfolioSummary.critical ? "rgba(211,47,47,.06)" : "rgba(0,122,96,.055)" }}>
-                <Box sx={{ width: 24, height: 24, flexShrink: 0, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: index === 2 && portfolioSummary.critical ? "error.main" : aliareColors.green, color: "white", fontSize: 12, fontWeight: 900 }}>{index + 1}</Box>
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>{insight}</Typography>
-              </Box>
-            ))}
+      <Card component="section" elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:3}}>
+        <Box sx={{px:2.3,py:2}}>
+          <Box>
+            <Typography sx={{fontWeight:800}}>Distribuições complementares da carteira</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Composição geral por cliente, categoria, situação e responsável, além de leituras automáticas do período
+            </Typography>
           </Box>
-        </ChartCard>
+        </Box>
+        <Box sx={{p:{xs:1.5,md:2}}}>
+      {/* Distribuições sem a implementação duplicada de PieChart/legend.
+          Todos os campos são reversíveis, recalculam percentuais e abrem os tickets reais. */}
+      <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
+        {!selectedClient && <SelectableDonut title="Participação por cliente" description="Todos os clientes no recorte; distribuição de atendimentos abertos"
+          parts={clientPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showClientTickets(name)}/>}
+        <SelectableDonut title="Atendimentos por categoria" description="Categorias atuais dos tickets abertos no filtro"
+          parts={categoryPieData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showTickets("Categoria: "+name,scopedTickets.filter(t=>(t.category?.trim()||"Sem categoria")===name))}/>
+        <SelectableDonut title="Situação dos atendimentos" description="Status atual de todos os tickets abertos no filtro; diferente do backlog público"
+          parts={statusPieData.map((item,i)=>({name:item.name,value:item.value,color:[
+            semanticChartColors.normal,aliareColors.green,semanticChartColors.attention,semanticChartColors.positive
+          ][i%4]!}))}
+          onInspect={name=>{
+            if(name==="Novos")showStatusTickets("new");
+            if(name==="Em Atendimento")showStatusTickets("attendance");
+            if(name==="Parados")showStatusTickets("stopped");
+            if(name==="Resolvidos")showStatusTickets("resolved");
+            if(name==="Outras situações")showTickets("Outras situações",scopedTickets.filter(t=>!["New","InAttendance","Stopped","Resolved","Closed"].includes(t.baseStatus??"")));
+          }}/>
+        <Box sx={{minWidth:0,gridColumn:selectedClient?"1 / -1":"auto"}}>
+        <SelectableHorizontalBars title="Volume por responsável" description="Distribuição por responsável atual; não indica produtividade individual"
+          parts={ownerChartData.map((item,i)=>({name:item.name,value:item.value,color:PIE_COLORS[i%PIE_COLORS.length]!}))}
+          onInspect={name=>showTickets("Responsável: "+name,scopedTickets.filter(t=>(t.owner?.trim()||"Sem responsável")===name))}/>
+        </Box>
       </Box>
+      <ExecutiveSection title="Insights complementares" subtitle="Leituras de qualidade e atenção derivadas do recorte completo" compact>
+        <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:1.25}}>
+          {executiveInsights.map((insight,index)=><Box key={insight} sx={{display:"flex",gap:1,p:1.3,
+            borderRadius:1.5,backgroundColor:"action.hover"}}>
+            <Typography variant="caption" sx={{fontWeight:900,color:"success.main"}}>{index+1}.</Typography>
+            <Typography variant="body2" sx={{lineHeight:1.55}}>{insight}</Typography>
+          </Box>)}
+        </Box>
+      </ExecutiveSection>
+
+        </Box>
+      </Card>
 
       {/* =================================================
           SEM DADOS
@@ -2665,7 +1854,7 @@ export function Clients() {
             borderRadius: 2,
           }}
         >
-          Nenhum ticket foi encontrado para os filtros selecionados.
+          Nenhum atendimento com abertura no período foi encontrado para este recorte. Isso não significa ausência de pendências antigas — consulte o backlog público atual no painel superior.
         </Alert>
       )}
 
@@ -3629,310 +2818,18 @@ export function Clients() {
    LEGENDA COMPACTA DOS GRÁFICOS
 ========================================================= */
 
-function CompactPieLegend({
-  data,
-  hiddenItems: controlledHiddenItems,
-  onToggleItem,
-  onItemClick,
-}: {
-  data: PieDataItem[];
-  hiddenItems?: Set<string>;
-  onToggleItem?: (name: string) => void;
-  onItemClick?: (name: string) => void;
-}) {
-  const [localHiddenItems, setLocalHiddenItems] = useState<Set<string>>(() => new Set());
-  const hiddenItems = controlledHiddenItems ?? localHiddenItems;
-  const visibleTotal = data.reduce((sum, item) => hiddenItems.has(item.name) ? sum : sum + item.value, 0);
-  const toggleItem = (name: string) => {
-    if (onToggleItem) {
-      onToggleItem(name);
-      return;
-    }
-    setLocalHiddenItems((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else if (data.length - next.size > 1) next.add(name);
-      return next;
-    });
-  };
-
-  return (
-    <Stack
-      spacing={0.5}
-      sx={{
-        minWidth: 0,
-      }}
-    >
-      {data.map(
-        (
-          item,
-          index
-        ) => {
-          const percent =
-            visibleTotal > 0
-              ? Math.round(
-                  (item.value /
-                    visibleTotal) *
-                    100
-                )
-              : 0;
-
-          const active = !hiddenItems.has(item.name);
-          const clickable = true;
-
-          return (
-            <Box
-              key={`${item.name}-${index}`}
-              role={
-                clickable
-                  ? "button"
-                  : undefined
-              }
-              tabIndex={
-                clickable
-                  ? 0
-                  : undefined
-              }
-              title={
-                item.name
-              }
-              onClick={() => toggleItem(item.name)}
-              onDoubleClick={() => {
-                if (item.name !== "Outros") onItemClick?.(item.name);
-              }}
-              onKeyDown={(
-                event
-              ) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  toggleItem(item.name);
-                }
-              }}
-              sx={{
-                display:
-                  "grid",
-
-                gridTemplateColumns:
-                  "10px minmax(0, 1fr) auto",
-
-                alignItems:
-                  "center",
-
-                gap: 0.8,
-
-                px: 0.75,
-                py: 0.6,
-
-                borderRadius:
-                  1.25,
-
-                cursor: "pointer",
-                opacity: active ? 1 : 0.38,
-                textDecoration: active ? "none" : "line-through",
-                transition: "all .2s ease",
-
-                "&:hover":
-                  clickable
-                    ? {
-                        backgroundColor:
-                          "action.hover",
-                      }
-                    : undefined,
-              }}
-            >
-              <Box
-                sx={{
-                  width: 9,
-                  height: 9,
-
-                  borderRadius:
-                    "50%",
-
-                  backgroundColor: active ? PIE_COLORS[index % PIE_COLORS.length] : "text.disabled",
-                  boxShadow: active ? `0 0 8px ${PIE_COLORS[index % PIE_COLORS.length]}88` : "none",
-                }}
-              />
-
-              <Typography
-                variant="body2"
-                sx={{
-                  minWidth: 0,
-
-                  fontWeight:
-                    600,
-
-                  fontSize:
-                    "0.78rem",
-
-                  lineHeight:
-                    1.25,
-
-                  overflow:
-                    "hidden",
-
-                  textOverflow:
-                    "ellipsis",
-
-                  whiteSpace:
-                    "nowrap",
-                }}
-              >
-                {item.name}
-              </Typography>
-
-              <Stack
-                direction="row"
-                spacing={0.5}
-                sx={{
-                  alignItems:
-                    "center",
-
-                  flexShrink:
-                    0,
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontWeight:
-                      800,
-
-                    fontVariantNumeric:
-                      "tabular-nums",
-                  }}
-                >
-                  {item.value}
-                </Typography>
-
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{
-                    minWidth:
-                      30,
-
-                    textAlign:
-                      "right",
-
-                    fontVariantNumeric:
-                      "tabular-nums",
-                  }}
-                >
-                  {percent}%
-                </Typography>
-              </Stack>
-            </Box>
-          );
-        }
-      )}
-    </Stack>
-  );
-}
-
-/* =========================================================
-   TOOLTIP COMPACTO DOS GRÁFICOS
-========================================================= */
-
-function CompactPieTooltip({
-  active,
-  payload,
-  valueLabel,
-}: {
-  active?:
-    boolean;
-
-  payload?:
-    Array<{
-      name?:
-        string;
-
-      value?:
-        number;
-
-      payload?:
-        PieDataItem;
-    }>;
-
-  valueLabel:
-    string;
-}) {
-  if (
-    !active ||
-    !payload ||
-    payload.length ===
-      0
-  ) {
-    return null;
-  }
-
-  const entry =
-    payload[0];
-
-  const item =
-    entry?.payload;
-
-  const name =
-    item?.name ??
-    entry?.name ??
-    "Item";
-
-  const value =
-    item?.value ??
-    entry?.value ??
-    0;
-
-  return (
-    <Box
-      sx={{
-        maxWidth:
-          280,
-
-        px: 1.25,
-        py: 1,
-
-        border:
-          "1px solid",
-
-        borderColor:
-          "divider",
-
-        borderRadius:
-          1.5,
-
-        backgroundColor:
-          "background.paper",
-
-        boxShadow:
-          "0 10px 28px rgba(16,24,40,0.12)",
-
-        borderTop:
-          `3px solid ${aliareColors.green}`,
-      }}
-    >
-      <Typography
-        variant="body2"
-        title={
-          name
-        }
-        sx={{
-          fontWeight:
-            700,
-
-          lineHeight:
-            1.35,
-        }}
-      >
-        {name}
+function CompactPieLegend({data}:{data:PieDataItem[]}) {
+  // A legenda do PDF é informativa; somente gráficos ao vivo possuem filtros interativos.
+  const total=data.reduce((sum,item)=>sum+item.value,0);
+  return <Stack spacing={.85} sx={{minWidth:0}}>
+    {data.map((item,index)=><Stack key={item.name} direction="row" sx={{alignItems:"center",gap:1,minWidth:0}}>
+      <Box sx={{width:9,height:9,flexShrink:0,borderRadius:"50%",backgroundColor:PIE_COLORS[index%PIE_COLORS.length]}}/>
+      <Typography variant="caption" sx={{flex:1,minWidth:0,overflowWrap:"anywhere"}}>{item.name}</Typography>
+      <Typography variant="caption" sx={{fontWeight:800,fontVariantNumeric:"tabular-nums"}}>
+        {item.value} · {total?(100*item.value/total).toLocaleString("pt-BR",{maximumFractionDigits:1}):0}%
       </Typography>
-
-      <Typography
-        variant="caption"
-        color="text.secondary"
-      >
-        {value}{" "}
-        {valueLabel}
-      </Typography>
-    </Box>
-  );
+    </Stack>)}
+  </Stack>;
 }
 
 /* =========================================================
@@ -4003,14 +2900,16 @@ function StandardMetricCard({
 }: {
   title: string; value: ReactNode; description: string; info: MetricInfoDefinition; accentColor: string; onClick?: () => void;
 }) {
-  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.periodRule}`} accent={accentColor} onClick={onClick} />;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={description} info={`${info.summary} • ${info.calculation}`} metadata={{source:info.source,periodRule:info.periodRule,denominator:info.reference}} accent={accentColor} onClick={onClick} />;
 }
 
 
 function PresentationKpi({ title, value, detail, color, onClick }: {
   title: string; value: ReactNode; detail: string; color: string; onClick: () => void;
 }) {
-  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} accent={color} onClick={onClick} />;
+  return <ExecutiveKpiCard title={title} value={value} subtitle={detail} accent={color} onClick={onClick}
+    info={`${title}. ${detail}. Indicador calculado a partir do snapshot sincronizado do Movidesk/HUB.`}
+    metadata={{source:"Movidesk / HUB",periodRule:"Recorte aplicado à apresentação do cliente."}} />;
 }
 
 function ExecutiveDonutPanel({ title, data, total }: { title: string; data: PieDataItem[]; total: number }) {
@@ -4069,48 +2968,6 @@ function ExecutiveBarPanel({ title, data, onClick }: { title: string; data: PieD
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>Sem dados no recorte.</Typography>
       )}
-    </Box>
-  );
-}
-
-/* =========================================================
-   CARD DE GRÁFICO
-========================================================= */
-
-function ChartCard({
-  title, subtitle, children,
-}: {
-  title: string; subtitle: string; children: ReactNode;
-}) {
-  return <ExecutiveSection title={title} subtitle={subtitle} compact>{children}</ExecutiveSection>;
-}
-
-/* =========================================================
-   GRÁFICO SEM DADOS
-========================================================= */
-
-function EmptyChart() {
-  return (
-    <Box
-      sx={{
-        height: 280,
-
-        display:
-          "flex",
-
-        alignItems:
-          "center",
-
-        justifyContent:
-          "center",
-      }}
-    >
-      <Typography
-        variant="body2"
-        color="text.secondary"
-      >
-        Nenhum dado disponível para o filtro selecionado.
-      </Typography>
     </Box>
   );
 }
@@ -4330,7 +3187,8 @@ function ticketResolutionMinutes(ticket: Ticket): number | null {
     return ticket.lifetimeMinutes;
   }
 
-  const endValue = ticket.closedDate || ticket.resolvedDate;
+  // Encerramento administrativo pode ser posterior à solução; priorizar o marco resolvido.
+  const endValue = ticket.resolvedDate || ticket.closedDate;
   if (!endValue) return null;
 
   const createdAt = new Date(ticket.createdDate).getTime();
@@ -4343,9 +3201,9 @@ function ticketResolutionMinutes(ticket: Ticket): number | null {
 }
 
 function isBug(ticket: Ticket) {
-  const category = normalize(ticket.category);
-  const type = normalize(ticket.azureWorkItem?.workItemType);
-  return category === "bug" || category.includes("erro de sistema") || type.includes("correcao");
+  // Categoria atual do Movidesk. Correção Azure e "Problema" não são automaticamente Bug.
+  // Bug tecnicamente confirmado demanda evidência separada da análise de suporte.
+  return normalize(ticket.category)==="bug";
 }
 
 function taskStatusGroup(ticket: Ticket) {
@@ -4432,10 +3290,6 @@ function clientInitials(client: string) {
   const ignored = new Set(["de", "da", "do", "das", "dos", "e"]);
   const words = client.split(/\s+/).filter((word) => word && !ignored.has(normalize(word)));
   return words.slice(0, 3).map((word) => word[0]).join("").toUpperCase();
-}
-
-function abbreviate(value: string, length: number) {
-  return value.length > length ? `${value.slice(0, length - 1)}…` : value;
 }
 
 function formatMinutes(

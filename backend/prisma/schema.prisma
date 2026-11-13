@@ -507,6 +507,7 @@ model Ticket {
   actions MovideskTicketAction[]
   ownerHistories MovideskOwnerHistory[]
   statusHistories MovideskStatusHistory[]
+  categorySnapshots MovideskCategorySnapshot[]
   movideskEnrichment MovideskTicketEnrichment?
 
   // Auditoria
@@ -547,6 +548,27 @@ model Ticket {
 // =========================================================
 // AÇÕES E APONTAMENTOS MOVIDESK
 // =========================================================
+
+// Observações reais de categoria capturadas pelo HUB.
+// A primeira observação NÃO comprova a categoria na abertura do ticket.
+// observedAt = momento da captura; sourceLastUpdate = atualização remota,
+// que não representa necessariamente o instante da mudança de categoria.
+model MovideskCategorySnapshot {
+  id Int @id @default(autoincrement())
+  ticketId Int
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sequenceKey String @db.VarChar(64)
+  kind String @db.VarChar(20)
+  category String @db.VarChar(128)
+  previousCategory String? @db.VarChar(128)
+  source String @db.VarChar(40)
+  observedAt DateTime @default(now())
+  sourceLastUpdate DateTime?
+
+  @@unique([ticketId, sequenceKey])
+  @@index([ticketId, observedAt])
+  @@index([kind, category])
+}
 
 model MovideskTicketEnrichment {
   id Int @id @default(autoincrement())

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "../database/prisma";
+import { observeTicketCategory } from "./TicketCategoryHistoryService";
 import {
   areMovideskTeamsAlertsEnabled,
   isMovideskNewTicketStatus,
@@ -129,7 +130,7 @@ export class MovideskJsonImportService {
           const previous = await tx.ticket.findUnique({
             where: { movideskId: ticket.movideskId },
             select: {
-              id: true, ticketType: true, cause: true, reason: true, businessArea: true,
+              id: true, ticketType: true, cause: true, reason: true, businessArea: true, category: true, lastUpdate: true,
               createdDate: true, client: true, owner: true, service: true,
               serviceFirstLevel: true, serviceSecondLevel: true, serviceThirdLevel: true,
               ownerTeam: true, isDeleted: true,
@@ -139,7 +140,11 @@ export class MovideskJsonImportService {
             ? isInOperationalSimerSupportPortfolio(previous)
             : false;
 
-          await tx.ticket.upsert({
+          const staleCategoryPayload = Boolean(previous?.lastUpdate && (!ticket.lastUpdate || ticket.lastUpdate < previous.lastUpdate));
+          const observedCategory = staleCategoryPayload || !ticket.category?.trim()
+            ? previous?.category ?? ticket.category
+            : ticket.category;
+          const savedTicket = await tx.ticket.upsert({
             where: { movideskId: ticket.movideskId },
             create: {
               ...ticket,
@@ -150,19 +155,29 @@ export class MovideskJsonImportService {
             },
             update: {
               ...ticket,
+              category: observedCategory,
+              lastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
               // Payloads parciais não devem apagar o tipo oficial já identificado.
               ticketType: ticket.ticketType ?? previous?.ticketType ?? null,
               // A API pode deixar de devolver customFieldValues históricos. Não
               // apagamos uma classificação oficial já persistida só porque o
               // campo deixou de vir no payload atual.
-              cause: this.isCategory(ticket.category, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
-              reason: this.isCategory(ticket.category, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
+              cause: this.isCategory(observedCategory, "problema") ? (ticket.cause ?? previous?.cause ?? null) : null,
+              reason: this.isCategory(observedCategory, "duvida") ? (ticket.reason ?? previous?.reason ?? null) : null,
               businessArea: ticket.businessArea ?? previous?.businessArea ?? null,
               importSource: source,
               importBatch: batchId,
               importedAt: new Date(),
               importRunId: importRun.id,
             },
+          });
+
+          await observeTicketCategory(tx, {
+            ticketId: savedTicket.id,
+            previousCategory: previous?.category ?? null,
+            category: observedCategory,
+            source,
+            sourceLastUpdate: staleCategoryPayload ? previous?.lastUpdate : ticket.lastUpdate,
           });
 
           // Só a primeira inserção do ticket gera evento. A chave única protege

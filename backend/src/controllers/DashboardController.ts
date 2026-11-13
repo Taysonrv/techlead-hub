@@ -991,7 +991,7 @@ export class DashboardController {
               assignedToName: true, client: true, criticality: true,
               module: true, process: true, movideskTicket: true,
               deliveredVersion: true, prioritized: true, blockedProcess: true,
-              azureChangedAt: true, stateChangedAt: true, syncedAt: true,
+              azureChangedAt: true, azureClosedAt: true, stateChangedAt: true, syncedAt: true,
             },
           })
         : [];
@@ -1142,6 +1142,8 @@ export class DashboardController {
                 blockedProcess:
                   true,
                 azureChangedAt:
+                  true,
+                azureClosedAt:
                   true,
                 stateChangedAt:
                   true,

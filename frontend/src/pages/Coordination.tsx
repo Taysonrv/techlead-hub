@@ -1,4 +1,5 @@
 import { KpiGrid } from "../components/KpiGrid";
+import { ClientExecutiveReportPanel } from "../components/BomJesusReportPanel";
 import { AsyncState } from "../components/AsyncState";
 import { ContentState } from "../components/ContentState";
 import {
@@ -337,6 +338,8 @@ export function Coordination() {
         description="Prioridades, capacidade, qualidade e desenvolvimento da operação em uma visão executiva."
         meta={data ? `Coordenação: ${data.scope.coordinator} · ${data.scope.analysts.length} analistas · ${data.scope.clients.length} clientes · Atualizado ${new Date(data.generatedAt).toLocaleTimeString("pt-BR")}` : undefined}
       />
+
+      <ClientExecutiveReportPanel />
 
       <Card variant="outlined" sx={{ overflow: "hidden", borderRadius: 2.5, backgroundColor: "background.paper", mb: 2 }}>
         <Box sx={{ p: { xs: 1.5, md: 2 }, borderBottom: "1px solid", borderColor: "divider", background: theme.palette.mode === "dark" ? "linear-gradient(110deg,rgba(24,199,122,.055),rgba(47,111,237,.035),transparent)" : "linear-gradient(110deg,rgba(24,199,122,.045),rgba(47,111,237,.025),transparent)" }}>
