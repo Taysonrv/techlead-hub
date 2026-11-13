@@ -43,6 +43,8 @@ import { getLocalNotificationPreferences, saveLocalNotificationPreferences, type
 
 type ConfigurationState = {
   databaseConfigured: boolean;
+  weatherConfigured?: boolean;
+  weatherCredentialSource?: "central" | "environment" | "missing";
   organization: string;
   project: string;
   wiki: string;
@@ -84,6 +86,7 @@ const EMPTY_TEAMS_WORKFLOW_FORM: TeamsWorkflowForm = {
 };
 
 type ConfigurationForm = {
+  weatherApiKey: string;
   databaseUrl: string;
   organization: string;
   project: string;
@@ -164,6 +167,7 @@ type ClassificationCoverage = {
 
 
 const EMPTY_FORM: ConfigurationForm = {
+  weatherApiKey: "",
   databaseUrl: "",
   organization: "",
   project: "",
@@ -593,6 +597,7 @@ export function Settings() {
       const response = await api.put<ConfigurationState & { restartRequired: boolean }>(
         "/system-settings",
         {
+          weatherApiKey: form.weatherApiKey,
           organization: form.organization,
           project: form.project,
           wiki: form.wiki,
@@ -611,7 +616,7 @@ export function Settings() {
       }
 
       setConfiguration(result);
-      setForm(current => ({ ...current, organization: result.organization, project: result.project, wiki: result.wiki, pat: "", movideskToken: "", movideskUrl: result.movideskUrl }));
+      setForm(current => ({ ...current, organization: result.organization, project: result.project, wiki: result.wiki, weatherApiKey: "", pat: "", movideskToken: "", movideskUrl: result.movideskUrl }));
 
       setSuccess(
         result.restartRequired
@@ -843,6 +848,14 @@ export function Settings() {
           </CardContent>
         </Card>}
 
+        <Card variant="outlined" sx={{borderRadius:2.5}}><CardContent sx={{p:{xs:2,md:2.5}}}>
+          <Typography sx={{fontWeight:800}}>Previsão do tempo</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{mb:2}}>Chave compartilhada entre Web e Desktop. A cidade continua individual, no calendário de cada usuário.</Typography>
+          <TextField fullWidth type="password" label="Nova chave WeatherAPI" value={form.weatherApiKey} disabled={!isAdmin}
+            onChange={event=>updateField("weatherApiKey",event.target.value)} autoComplete="new-password"
+            placeholder={configuration?.weatherConfigured?"Chave configurada · valor oculto":"Não configurada"}
+            helperText={configuration?.weatherCredentialSource==="environment"?"Chave somente no ambiente deste serviço. Salve uma chave central para disponibilizar também nas instalações Desktop.":"Validada ao salvar e armazenada criptografada no banco. Não é incorporada ao instalador."}/>
+        </CardContent></Card>
         <Card
           elevation={0}
           sx={{

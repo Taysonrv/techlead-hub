@@ -234,8 +234,15 @@ export function Chat() {
     if (unread > previousUnread.current) {
       const notificationPreferences = getLocalNotificationPreferences();
       if (soundEnabled && notificationPreferences.sound && notificationPreferences.chat) playNotificationSound("chat");
-      if (notificationPreferences.chat && getDesktopAlertsEnabled(user?.id) && document.visibilityState !== "visible" && "Notification" in window && Notification.permission === "granted") {
-        new Notification("TechLead Hub", { body: "Você recebeu uma nova mensagem no chat." });
+      if (notificationPreferences.chat && getDesktopAlertsEnabled(user?.id) && document.visibilityState !== "visible") {
+        const fallback=()=>{if("Notification" in window&&Notification.permission==="granted"){
+          const notice=new Notification("TechLead Hub",{body:"Você recebeu uma nova mensagem no chat.",silent:!notificationPreferences.sound});
+          notice.onclick=()=>window.focus();window.setTimeout(()=>notice.close(),8_000);
+        }};
+        if(window.techLeadHub?.notifications){
+          void window.techLeadHub.notifications.show({key:`chat-unread:${user?.id}:${Date.now()}`,title:"TechLead Hub",body:"Você recebeu uma nova mensagem no chat.",silent:!notificationPreferences.sound})
+            .then(shown=>{if(!shown)fallback();}).catch(fallback);
+        }else fallback();
       }
     }
     previousUnread.current = unread;

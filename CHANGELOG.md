@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0-rc.14 — 2026-11-13
+
+### Resultados e operação
+- Clientes: visão integrada, seções abertas, cards padronizados, comparações de intervalos, séries mensais e PDF no cabeçalho.
+- Correções/evoluções: Tasks únicas concluídas por `azureClosedAt`, agrupadas por versão; inclui tickets antigos vinculados ao cliente. Versão informada não comprova instalação/homologação.
+- Gráficos: legendas sem checkbox, consulta por ponto/mês/série e ocultação da participação por cliente no foco individual.
+- Liderança/coordenação: resolutividade, evidências de OKRs, acompanhamento semanal e restrições de acesso.
+- Pendências públicas, fontes de SLA/CSAT/primeiro contato e favoritos de cards/rotinas revisados.
+
+### Desktop e confiabilidade
+- Popups internos incluem avisos recentes habilitados de versões e Tasks; excedentes não são descartados ao atingir a fila de dois avisos.
+- Avisos do Windows são confirmados como exibidos apenas após sucesso do canal; permissão do navegador não bloqueia o IPC nativo.
+- WeatherAPI: chave centralizada e criptografada, validada antes de substituir e sem credenciais no instalador. Administrador configura em Dados; cidade permanece por usuário.
+- Dependência transitiva `qs` atualizada para remover alerta moderado da auditoria npm.
+- CSP libera somente `https://cdn.weatherapi.com` para ícones do clima; cache distingue cidade/estado.
+
+> Candidata beta. Validação real de popup do Windows, atualização rc.13 → rc.14 e previsão com chave válida requerem execução do aplicativo instalado.
+
 ## 2.1.0-rc.13 — 2026-10-30
 
 ### Inicialização e diagnóstico

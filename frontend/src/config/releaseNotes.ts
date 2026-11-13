@@ -9,9 +9,23 @@ export type ReleaseNote = {
   items: readonly ReleaseNoteItem[];
 };
 
-export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || "development";
+export const FALLBACK_APP_VERSION = import.meta.env.VITE_APP_VERSION || (import.meta.env.PROD ? "2.1.0-rc.14" : "development");
 
 export const releaseNotes: Record<string, ReleaseNote> = {
+  "2.1.0-rc.14": {
+    version: "2.1.0-rc.14",
+    title: "Resultados por cliente, entregas e experiência Desktop",
+    items: [
+      {title:"Clientes e comparações",description:"Tela integrada com indicadores padronizados, comparação entre períodos, evolução mensal, métricas de qualidade e exportação em PDF no cabeçalho."},
+      {title:"Correções e versões",description:"Entregas por data oficial de conclusão no Azure, deduplicação de Tasks, evolução de seis meses e rastreabilidade por versão e atendimento."},
+      {title:"Gráficos mais diretos",description:"Legendas clicáveis para ocultar séries e consulta por mês ao clicar nos pontos; participação por cliente oculta no foco individual."},
+      {title:"Liderança e coordenação",description:"Acompanhamento de resolutividade, evidências de OKRs e espaço semanal de coordenação com controle de acesso."},
+      {title:"Pendências e favoritos",description:"Pendências públicas com critérios temporais revisados e atalhos de cards e rotinas favoritos."},
+      {title:"Popups de notificações",description:"Avisos recentes habilitados aparecem na interface; a fila preserva excedentes e avisos do Windows não dependem da permissão do navegador Electron."},
+      {title:"Clima no aplicativo",description:"Chave WeatherAPI central, criptografada e configurável por administrador; a política de segurança permite os ícones oficiais do provedor."},
+      {title:"Confiabilidade",description:"Revisão de denominadores de SLA, resolução no primeiro contato, CSAT pela data da pesquisa e distinção entre entrega registrada e instalação no cliente."},
+    ],
+  },
   "2.1.0-rc.11": {
     version: "2.1.0-rc.11",
     title: "Recuperação de integrações mais confiável",

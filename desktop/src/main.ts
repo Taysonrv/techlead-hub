@@ -3043,6 +3043,8 @@ function createWindow() {
 
         webSecurity:
           true,
+        // Keep notification polling and meeting reminders active in the tray.
+        backgroundThrottling: false,
       },
     });
 

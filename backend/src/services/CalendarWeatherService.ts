@@ -1,3 +1,4 @@
+import { systemConfigurationService } from "./SystemConfigurationService";
 import { prisma } from "../database/prisma";
 
 type ForecastDay = {
@@ -71,12 +72,13 @@ export class CalendarWeatherService {
   }
 
   async getForecast(userId: number) {
+    await systemConfigurationService.loadIntoEnvironment();
     const city = await this.getLocation(userId);
     const apiKey = process.env.WEATHER_API_KEY?.trim() ?? "";
     if (!apiKey) return { configured: false, city, location: null, days: [] as ForecastDay[] };
     if (!city) return { configured: true, city: null, location: null, days: [] as ForecastDay[] };
 
-    const cacheKey = `br-state-v2:${normalizeLocation(city)}`;
+    const cacheKey = `br-state-v3:${city.trim().toLocaleLowerCase("pt-BR")}`;
     const cached = forecastCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return { configured: true, city, ...cached.result };
@@ -204,6 +206,7 @@ export class CalendarWeatherService {
       location: [location.name, location.region, location.country].filter((part) => typeof part === "string" && part.trim()).join(", "),
       days,
     };
+    if(forecastCache.size>=1000)forecastCache.clear();
     forecastCache.set(cacheKey, { expiresAt: Date.now() + FORECAST_TTL_MS, result });
     return { configured: true, city, ...result };
   }

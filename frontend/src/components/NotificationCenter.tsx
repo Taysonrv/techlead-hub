@@ -1,3 +1,4 @@
+import { selectPopupCandidates } from "../utils/notificationPopup";
 import {
   Badge,
   Box,
@@ -110,6 +111,8 @@ export function NotificationCenter() {
   const userId = user?.id ?? null;
   const [toastQueue, setToastQueue] = useState<HubNotification[]>([]);
   const toast = toastQueue[0] ?? null;
+  const [visibility,setVisibility]=useState(document.visibilityState);
+  useEffect(()=>{const refresh=()=>setVisibility(document.visibilityState);document.addEventListener("visibilitychange",refresh);return()=>document.removeEventListener("visibilitychange",refresh);},[]);
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError,setLoadError] = useState("");
@@ -123,6 +126,7 @@ export function NotificationCenter() {
   const [onlyUnread,setOnlyUnread] = useState(false);
   const [localPreferences, setLocalPreferences] = useState<LocalNotificationPreferences>(() => getLocalNotificationPreferences());
   const alertedKeys = useRef(new Set<string>());
+  const nativePendingKeys = useRef(new Set<string>());
   const notificationHydratedRef = useRef(false);
   const loadingRef = useRef(false);
   const meetingLoadingRef = useRef(false);
@@ -286,7 +290,14 @@ export function NotificationCenter() {
     return updates.onStateChange(addDesktopUpdate);
   }, [addDesktopUpdate]);
 
-  const enabledForKind = useCallback((kind: NotificationKind) => kind === "USER_ONLINE" ? localPreferences.chat : kind === "CHAT_MENTION" ? localPreferences.chat : (kind === "OPERATION_ALERT" || kind === "KNOWN_PROBLEM" || kind === "MEETING_REMINDER") ? localPreferences.operation : kind === "APP_VERSION" ? localPreferences.appVersion : kind === "SIMER_VERSION" ? localPreferences.simerVersion : kind === "AZURE_COMPLETED" ? localPreferences.azureCompleted : localPreferences.azureUpdated, [localPreferences]);
+  const enabledForKind = useCallback((kind: NotificationKind) => {
+    if(kind==="USER_ONLINE"||kind==="CHAT_MENTION")return localPreferences.chat;
+    if(["OPERATION_ALERT","KNOWN_PROBLEM","MEETING_REMINDER","TEAM_ACTION"].includes(kind))return localPreferences.operation;
+    if(kind==="APP_VERSION")return localPreferences.appVersion&&preferences.appVersion;
+    if(kind==="SIMER_VERSION")return localPreferences.simerVersion&&preferences.simerVersion;
+    if(kind==="AZURE_COMPLETED")return localPreferences.azureCompleted&&preferences.azureCompleted;
+    return localPreferences.azureUpdated&&preferences.azureUpdated;
+  },[localPreferences,preferences]);
   const unread = useMemo(
     () => items.filter((item) => enabledForKind(item.kind) && !readKeys.includes(item.key)),
     [items, readKeys, enabledForKind],
@@ -318,63 +329,35 @@ export function NotificationCenter() {
     }
 
     const now = Date.now();
-    const unseen = unread
-      .filter((item) => !alertedKeys.current.has(item.key))
-      .sort((left, right) => new Date(right.occurredAt).getTime() - new Date(left.occurredAt).getTime());
-    const fresh = unseen.filter((item) => {
-      const age = now - new Date(item.occurredAt).getTime();
-      return Number.isFinite(age) && age >= 0 && age < 5 * 60_000;
-    });
-    const isUrgent = (item: HubNotification) =>
-      item.kind === "CHAT_MENTION" || item.kind === "MEETING_REMINDER" ||
-      item.kind === "OPERATION_ALERT";
-    const hiddenDesktopBatch = document.visibilityState === "hidden" && preferences.desktopAlerts
-      ? fresh.slice(0, 2)
-      : [];
-    const toShow = document.visibilityState === "visible"
-      ? fresh.filter(isUrgent).slice(0, 2)
-      : [];
-
-    if (document.visibilityState === "hidden" && preferences.desktopAlerts) {
-      hiddenDesktopBatch.forEach((item) => {
-        if (window.techLeadHub?.notifications) {
-          void window.techLeadHub.notifications.show({
-            key: item.key,
-            title: item.title,
-            body: item.message,
-            silent: !localPreferences.sound,
-          }).then((shown) => {
-            if (shown) return;
-            if ("Notification" in window && Notification.permission === "granted") {
-              const native = new Notification(item.title, { body: item.message, silent: !localPreferences.sound });
-              native.onclick = () => window.focus();
-              window.setTimeout(() => native.close(), 8_000);
-            }
-          }).catch(() => undefined);
-          return;
-        }
-        if ("Notification" in window && Notification.permission === "granted") {
-          const native = new Notification(item.title, { body: item.message, silent: !localPreferences.sound });
-          native.onclick = () => window.focus();
-          window.setTimeout(() => native.close(), 8_000);
-        }
+    const persistShown=()=>{try{sessionStorage.setItem(sessionKey,JSON.stringify([...alertedKeys.current].slice(-500)));}catch{/* optional */}};
+    // Expired records stay in the bell, without replaying the history as popups.
+    unread.forEach(item=>{const age=now-Date.parse(item.occurredAt);if(Number.isFinite(age)&&age>=5*60_000)alertedKeys.current.add(item.key);});
+    const queued=new Set([...alertedKeys.current,...nativePendingKeys.current,...toastQueue.map(item=>item.key)]);
+    const batch=selectPopupCandidates(unread,queued,now,visibility==="visible"?2-toastQueue.length:2);
+    if(visibility==="visible"){
+      batch.forEach(item=>alertedKeys.current.add(item.key));
+      if(batch.length)setToastQueue(current=>[...current,...batch.filter(item=>!current.some(existing=>existing.key===item.key))].slice(0,2));
+    }else if(preferences.desktopAlerts){
+      batch.forEach(item=>{
+        const identity=userId;
+        const acknowledge=()=>{if(identityRef.current!==identity)return;alertedKeys.current.add(item.key);persistShown();};
+        const browserFallback=()=>{
+          if(identityRef.current!==identity)return;
+          if("Notification" in window&&Notification.permission==="granted"){
+            const native=new Notification(item.title,{body:item.message,silent:!localPreferences.sound});
+            native.onclick=()=>window.focus();window.setTimeout(()=>native.close(),8_000);acknowledge();
+          }
+        };
+        if(window.techLeadHub?.notifications){
+          nativePendingKeys.current.add(item.key);
+          void window.techLeadHub.notifications.show({key:item.key,title:item.title,body:item.message,silent:!localPreferences.sound})
+            .then(shown=>{if(shown)acknowledge();else browserFallback();}).catch(browserFallback).finally(()=>nativePendingKeys.current.delete(item.key));
+        }else browserFallback();
       });
     }
-    const hiddenBatchKeys = new Set(hiddenDesktopBatch.map((item) => item.key));
-    const freshKeys = new Set(fresh.map((item) => item.key));
-    unseen.forEach((item) => {
-      // Deixa os próximos itens recentes para a próxima consulta, em vez de
-      // descartá-los quando mais de dois avisos chegam no mesmo intervalo.
-      if (document.visibilityState === "hidden" && preferences.desktopAlerts && freshKeys.has(item.key) && !hiddenBatchKeys.has(item.key)) return;
-      alertedKeys.current.add(item.key);
-    });
-    notificationHydratedRef.current = true;
-    try { sessionStorage.setItem(sessionKey, JSON.stringify([...alertedKeys.current].slice(-500))); } catch { /* opcional */ }
-    if (toShow.length) setToastQueue((current) => {
-      const keys = new Set(current.map((item) => item.key));
-      return [...current, ...toShow.filter((item) => !keys.has(item.key))].slice(0, 2);
-    });
-  }, [unread, items.length, userId, preferences.desktopAlerts, localPreferences.sound, navigate, openNotification]);
+    notificationHydratedRef.current=true;
+    persistShown();
+  }, [unread,items.length,userId,preferences.desktopAlerts,localPreferences.sound,visibility,toastQueue]);
 
   useEffect(() => {
     if (!toast) return;
@@ -386,6 +369,7 @@ export function NotificationCenter() {
 
   useEffect(() => {
     alertedKeys.current.clear();
+    nativePendingKeys.current.clear();
     notificationHydratedRef.current = false;
     setToastQueue([]);setItems([]);setAnchor(null);setLoadError("");
   }, [userId]);
@@ -412,18 +396,18 @@ export function NotificationCenter() {
   }
 
   function changePreference(key: keyof NotificationPreferences, checked: boolean) {
-    if (key === "desktopAlerts" && checked && window.techLeadHub && "Notification" in window && Notification.permission === "default") {
+    if (key === "desktopAlerts" && checked && !window.techLeadHub && "Notification" in window && Notification.permission === "default") {
       void Notification.requestPermission().then((permission) => {
         if (permission !== "granted") {
-          setLoadError("A permissão de notificações do Windows não foi concedida. Você ainda pode usar o sino dentro do Hub.");
+          setLoadError("A permissão de notificações do navegador não foi concedida. Você ainda pode usar o sino dentro do Hub.");
           return;
         }
         savePreferenceChange(key, checked);
-      }).catch(() => setLoadError("Não foi possível solicitar a permissão de notificações do Windows."));
+      }).catch(() => setLoadError("Não foi possível solicitar a permissão de notificações do navegador."));
       return;
     }
-    if (key === "desktopAlerts" && checked && window.techLeadHub && "Notification" in window && Notification.permission !== "granted") {
-      setLoadError("A permissão de notificações do Windows está bloqueada. Ajuste-a nas configurações do sistema para ativar este canal.");
+    if (key === "desktopAlerts" && checked && !window.techLeadHub && "Notification" in window && Notification.permission !== "granted") {
+      setLoadError("A permissão de notificações do navegador está bloqueada. Ajuste-a nas configurações do sistema para ativar este canal.");
       return;
     }
     savePreferenceChange(key, checked);
@@ -589,7 +573,7 @@ export function NotificationCenter() {
               ["simerVersion", "Versões do SIMER"],
               ["azureCompleted", "Tarefas concluídas"],
               ["azureUpdated", "Alterações em tarefas"],
-              ["desktopAlerts", "Avisos do Windows (somente Desktop)"],
+              ["desktopAlerts", window.techLeadHub ? "Avisos do Windows" : "Avisos do navegador"],
             ] as Array<[keyof NotificationPreferences, string]>).map(([key, label]) => (
               <FormControlLabel
                 key={key}
@@ -617,7 +601,7 @@ export function NotificationCenter() {
         <Alert
           severity={toast?.kind === "OPERATION_ALERT" || toast?.kind === "KNOWN_PROBLEM" ? "warning" : toast?.kind === "AZURE_COMPLETED" ? "success" : "info"}
           variant="filled"
-          onClose={() => setToastQueue((current) => current.slice(1))}
+          onClose={(event) => {event.stopPropagation();setToastQueue((current) => current.slice(1));}}
           onClick={() => {
             if (!toast) return;
             const item = toast;

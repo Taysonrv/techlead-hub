@@ -417,7 +417,7 @@ export function GlobalTopBar() {
             </Stack>
             {weatherError && <Alert severity="warning" sx={{ mt: .8, py: 0, "& .MuiAlert-message": { py: .6, fontSize: ".72rem" } }}>{weatherError}</Alert>}
             {weatherLoading && <Stack direction="row" spacing={.8} sx={{ alignItems: "center", mt: .9 }}><CircularProgress size={16} /><Typography variant="caption" color="text.secondary">Carregando previsão...</Typography></Stack>}
-            {!weatherLoading && calendarWeather && !calendarWeather.configured && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>Previsão desativada. Configure WEATHER_API_KEY no ambiente do backend.</Typography>}
+            {!weatherLoading && calendarWeather && !calendarWeather.configured && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>Previsão desativada. Um administrador pode configurar a chave do clima em Configurações → Dados.</Typography>}
             {!weatherLoading && calendarWeather?.configured && !calendarWeather.city && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .7 }}>Informe uma cidade para consultar os próximos 3 dias.</Typography>}
             {!weatherLoading && calendarWeather?.days.length ? <>
               <Typography variant="caption" sx={{ display: "block", mt: .8, fontWeight: 800 }}>Previsão para os próximos 3 dias</Typography>

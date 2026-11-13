@@ -12,6 +12,7 @@ const SETTING_ENV = {
   pat: "AZURE_DEVOPS_PAT",
   movideskToken: "MOVIDESK_TOKEN",
   movideskUrl: "MOVIDESK_URL",
+  weatherApiKey: "WEATHER_API_KEY",
   teamsSupportTicketsEnabled: "TEAMS_SUPPORT_NEW_TICKETS_ENABLED",
   teamsSupportTicketsWebhook: "TEAMS_SUPPORT_NEW_TICKETS_WEBHOOK_URL",
   teamsTaskCreatedEnabled: "TEAMS_AZURE_TASK_CREATED_ENABLED",
@@ -231,6 +232,8 @@ class SystemConfigurationService {
       wiki: process.env.AZURE_DEVOPS_WIKI ?? "",
       patConfigured: Boolean(process.env.AZURE_DEVOPS_PAT),
       azureCredentialSource: persistedKeys.has("pat") ? "central" : process.env.AZURE_DEVOPS_PAT?.trim() ? "environment" : "missing",
+      weatherConfigured: Boolean(process.env.WEATHER_API_KEY?.trim()),
+      weatherCredentialSource: persistedKeys.has("weatherApiKey") ? "central" : process.env.WEATHER_API_KEY?.trim() ? "environment" : "missing",
       movideskConfigured: Boolean(process.env.MOVIDESK_TOKEN),
       movideskUrl: process.env.MOVIDESK_URL?.trim() || "https://api.movidesk.com/public/v1",
       runtime: process.env.APP_RUNTIME?.trim() || "desktop",
@@ -371,6 +374,13 @@ class SystemConfigurationService {
     if (azure && (input.pat?.trim() || azure.organization !== currentAzure?.organization || azure.project !== currentAzure?.project))
       await this.validateAzureCandidate(input);
     if (input.movideskToken?.trim()) await this.validateMovideskCandidate(input);
+    if(input.weatherApiKey?.trim()){
+      if(input.weatherApiKey.trim().length>256)throw new Error("A chave do clima excede o tamanho permitido.");
+      const url=new URL("https://api.weatherapi.com/v1/current.json");url.searchParams.set("key",input.weatherApiKey.trim());url.searchParams.set("q","Brasilia");
+      let response:Response;
+      try{response=await fetch(url,{signal:AbortSignal.timeout(8_000)});}catch{throw new Error("Não foi possível validar a chave do clima. Tente novamente.");}
+      if(!response.ok)throw new Error("A chave do clima não foi aceita pelo provedor. Confira a chave e o limite de uso.");
+    }
 
     const changedKeys: string[] = [];
     for (const key of Object.keys(SETTING_ENV) as Array<keyof typeof SETTING_ENV>) {
