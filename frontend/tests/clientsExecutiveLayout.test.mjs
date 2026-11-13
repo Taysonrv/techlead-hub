@@ -7,14 +7,12 @@ const meeting=readFileSync(new URL("../src/components/ClientMeetingInsights.tsx"
 const analytics=readFileSync(new URL("../src/utils/clientMeetingAnalytics.ts",import.meta.url),"utf8");
 const occurs=(source,phrase)=>source.split(phrase).length-1;
 
-test("Clientes apresenta um cockpit primário e mantém histórico/apresentação recolhíveis",()=>{
+test("Clientes integra seções abertas e exportação no cabeçalho, sem apresentação separada",()=>{
  assert.equal(occurs(page,"<ClientMeetingInsights"),1);
- assert.equal(occurs(page,"<ClientMeetingPresentation"),1);
- assert.ok(page.includes("Detalhamento operacional e histórico"));
- assert.ok(page.includes("Distribuições complementares da carteira"));
- assert.ok(page.includes('className="client-presentation-container"'));
- assert.ok(page.includes('expanded={presentationExpanded}'));
- assert.ok(page.includes("Abrir apresentação / PDF")||meeting.includes("Abrir apresentação / PDF"));
+ for(const title of ["Detalhamento operacional e histórico","Distribuições complementares da carteira","Demanda e recorrência","Entregas e desenvolvimento","Pendências e encaminhamentos","Conclusão executiva"])assert.ok(page.includes(title),title);
+ for(const removed of ["<Accordion","presentationExpanded","requestFullscreen","presentationPage","Apresentar em tela cheia"])assert.ok(!page.includes(removed),removed);
+ assert.ok(page.includes('action={<Button className="client-print-hidden"'));
+ assert.equal(occurs(page,'"Exportar PDF"'),1);
 });
 test("não duplica gráfico de fluxo mensal nem usa os antigos PieCharts com legendas inconsistentes",()=>{
  assert.equal(occurs(page,"Evolução mensal de abertos, resolvidos e encerrados"),0);
@@ -24,13 +22,12 @@ test("não duplica gráfico de fluxo mensal nem usa os antigos PieCharts com leg
  assert.equal(occurs(page,"function ChartCard"),0);
  assert.equal(occurs(page,"function EmptyChart"),0);
 });
-test("cliente com backlog histórico permanece no seletor e o PDF inclui seis páginas",()=>{
+test("PDF exporta a tela integrada sem isolar o antigo painel",()=>{
  assert.ok(page.includes("tickets.filter((ticket) => ticket.isWithSimer === true)"));
- assert.ok(page.includes("Página {presentationPage + 1} de 6"));
- assert.ok(page.includes("[0, 1, 2, 3, 4, 5]"));
  assert.ok(page.includes("overflow: visible !important;"));
- assert.ok(page.includes("body.client-pdf-export .client-presentation-container"));
- assert.ok(!page.includes("body.client-pdf-export main > div:last-child > :not(#client-export-content)"));
+ assert.ok(!page.includes("client-presentation-container"));
+ assert.ok(!page.includes(":not(#client-export-content)"));
+ assert.ok(!page.includes('selectedClient && (\n        <Card id="client-export-content"'));
 });
 test("relatório usa uma única fonte para pendências públicas e mantém marcos de solução",()=>{
  assert.ok(page.includes("meetingAnalytics.pendingNow.length"));

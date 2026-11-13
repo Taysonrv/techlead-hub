@@ -5,7 +5,6 @@ import { KpiCard as ExecutiveKpiCard } from "./KpiCard";
 import { semanticChartColors } from "../theme/chartPalette";
 import { aliareColors } from "../theme/theme";
 import { Box, Button, Card, CardContent, Chip, Divider, Stack, Typography } from "@mui/material";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AssessmentOutlined, CalendarMonthOutlined, GroupsOutlined } from "@mui/icons-material";
 import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "./ExecutiveChartControls";
 import type { ClientMeetingAnalytics, WeeklyTicket } from "../utils/clientMeetingAnalytics";
@@ -15,7 +14,6 @@ type Props={
   tickets:WeeklyTicket[];
   selectedClient:string;
   onShowTickets:(title:string,ids:number[],subtitle?:string)=>void;
-  onOpenPresentation?:()=>void;
 };
 const br=(n:number)=>n.toLocaleString("pt-BR");
 const date=(d:Date)=>d.toLocaleDateString("pt-BR");
@@ -52,7 +50,7 @@ function Kpi({label,value,note,delta,onClick,color}:KpiProps){
     metadata={{source:"Movidesk — snapshot sincronizado no HUB",
       periodRule:label==="Pendentes públicos atuais"?"Estoque atual, incluindo tickets antigos.":"Mês de referência e filtros da tela Clientes."}}/>;
 }
-export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets,onOpenPresentation}:Props){
+export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowTickets}:Props){
   const month=a.month;
   const open=(title:string,rows:WeeklyTicket[],description?:string)=>onShowTickets(title,rows.map(x=>x.id),description);
   const byIds=(ids:number[])=>{const set=new Set(ids);return tickets.filter(t=>set.has(t.id));};
@@ -85,7 +83,6 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
           <Chip icon={<CalendarMonthOutlined/>} variant="outlined" label={"Referência: "+month.slice(5,7)+"/"+month.slice(0,4)} />
           <Chip size="small" variant="outlined" label={"Até "+nowName}/>
 
-          {selectedClient&&onOpenPresentation&&<Button size="small" variant="contained" color="success" onClick={onOpenPresentation} sx={{textTransform:"none"}}>Abrir apresentação / PDF</Button>}
         </Stack>
       </Stack>
     </Box>
@@ -210,52 +207,4 @@ export function ClientMeetingInsights({analysis:a,tickets,selectedClient,onShowT
       </Stack>
     </CardContent>
   </Card>;
-}
-
-/** Página limpa para o modo de apresentação e para o PDF do cliente. */
-export function ClientMeetingPresentation({analysis:a,client}:{
-  analysis:ClientMeetingAnalytics;client:string;
-}){
-  const card={p:1.5,border:"1px solid",borderColor:"divider",borderRadius:2,backgroundColor:"background.paper"};
-  const rows=a.months.map(m=>({month:m.month,abertos:m.opened,resolvidos:m.resolved,pendentesAbertos:m.pendingOpened}));
-  return <Box sx={{minWidth:0,width:"100%"}}>
-    <Typography variant="h5" sx={{fontWeight:850,mb:1}}>Resultados mensais · Suporte e Sustentação</Typography>
-    <Typography variant="body2" color="text.secondary" sx={{mb:1.5}}>
-      {client} • Histórico de 6 meses até {date(a.monthCutoff)} • comparação com período equivalente anterior.
-    </Typography>
-    <Box sx={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:1,mb:1.5}}>
-      {[
-        ["Abertos",br(a.opened.current),"Anterior: "+br(a.opened.previous)],
-        ["Resolvidos",br(a.resolved.current),"Anterior: "+br(a.resolved.previous)],
-        ["Backlog público",br(a.pendingNow.length),"Estoque atual"],
-        ["SLA 1ª resposta",p(a.responseSla.percentage),br(a.responseSla.measured)+" medidos"],
-      ].map(([label,val,note])=><ExecutiveKpiCard key={label} title={label} value={val} subtitle={note}
-        info={label==="Backlog público"?"Tickets públicos atualmente pendentes, inclusive de períodos anteriores.":"Movimento no mês até a data de corte. SLA inclui somente registros com prazos medidos."}
-        metadata={{source:"Movidesk / HUB",periodRule:"Mês de referência; backlog representa estoque atual."}}/>)}
-    </Box>
-    <Box sx={{...card,mb:1}}>
-      <Typography sx={{fontWeight:800,fontSize:".95rem"}}>Evolução dos atendimentos</Typography>
-      <Box sx={{height:245,width:"100%"}}>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={rows} margin={{top:15,right:12,left:-19,bottom:2}}>
-            <CartesianGrid strokeDasharray="3 4" vertical={false} opacity={.23}/>
-            <XAxis dataKey="month" tick={{fontSize:10}}/><YAxis allowDecimals={false} tick={{fontSize:10}}/>
-            <Tooltip/><Legend wrapperStyle={{fontSize:10}}/>
-            <Line dataKey="abertos" name="Abertos" type="monotone" stroke="#197350" strokeWidth={3} dot={{r:3}}/>
-            <Line dataKey="resolvidos" name="Resolvidos" type="monotone" stroke="#316885" strokeWidth={3} dot={{r:3}}/>
-          </LineChart>
-        </ResponsiveContainer>
-      </Box>
-    </Box>
-    <Stack direction="row" sx={{gap:1,flexWrap:"wrap",mb:1}}>
-      <Chip size="small" label={"SLA solução: "+p(a.solutionSla.percentage)+" ("+a.solutionSla.measured+" medidos)"}/>
-      <Chip size="small" label={"1º contato entre resolvidos: "+p(a.firstCall.percentage)+" · "+a.firstCall.measured+" medidos"}/>
-      <Chip size="small" label={"CSAT por data de resposta: "+(a.csat.measured?p(a.csat.percentage):"Sem avaliações no mês")}/>
-      <Chip size="small" label={"Tickets reabertos no mês: "+a.reopened}/>
-    </Stack>
-    <Typography variant="caption" color="text.secondary">
-      Pendências = tickets públicos em aberto no snapshot atual. Não representa saldo histórico do mês.
-      SLA somente com datas válidas. Visão produzida com dados sincronizados do HUB.
-    </Typography>
-  </Box>;
 }

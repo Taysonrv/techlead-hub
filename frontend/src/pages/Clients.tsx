@@ -1,4 +1,4 @@
-import { ClientMeetingInsights, ClientMeetingPresentation } from "../components/ClientMeetingInsights";
+import { ClientMeetingInsights } from "../components/ClientMeetingInsights";
 import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
 import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
 import { KpiGrid } from "../components/KpiGrid";
@@ -15,9 +15,6 @@ import {
   Chip,
   Divider,
   Drawer,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Autocomplete,
   Collapse,
   TextField,
@@ -37,13 +34,10 @@ import {
 } from "@mui/material";
 
 import {
-  ArrowBackOutlined,
   SearchOutlined,
   CloseOutlined,
   OpenInNewOutlined,
   ContentCopyOutlined,
-  ArrowForwardOutlined,
-  FullscreenExitOutlined,
   PictureAsPdfOutlined,
   ExpandMoreOutlined,
 } from "@mui/icons-material";
@@ -215,11 +209,7 @@ const PIE_COLORS = [
 export function Clients() {
   const [clientsPage, setClientsPage] = useState(0);
   const navigate = useNavigate();
-  const presentationRef = useRef<HTMLDivElement>(null);
-  const [presentationPage, setPresentationPage] = useState(0);
-  const [isPresenting, setIsPresenting] = useState(false);
   const [exportingPresentation, setExportingPresentation] = useState(false);
-  const [presentationExpanded,setPresentationExpanded]=useState(false);
 
   const [tickets, setTickets] =
     useState<Ticket[]>([]);
@@ -305,22 +295,6 @@ export function Clients() {
     const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
     return () => { unsubscribe(); controller.abort(); };
   }, []);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const active = document.fullscreenElement === presentationRef.current;
-      setIsPresenting(active);
-      if (!active) setPresentationPage(0);
-    };
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
-  }, []);
-
-  async function startPresentation() {
-    setPresentationPage(0);
-    await presentationRef.current?.requestFullscreen?.();
-  }
 
   async function exportClientPresentation() {
     if (exportingPresentation) return;
@@ -1347,124 +1321,22 @@ export function Clients() {
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 9mm; }
-          html, body.client-pdf-export {
-            background: #ffffff !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+          html, body.client-pdf-export { background: white !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           body.client-pdf-export .MuiDrawer-root,
           body.client-pdf-export #global-user-controls,
           body.client-pdf-export main > div:first-of-type,
-          body.client-pdf-export .presentation-actions,
-          body.client-pdf-export .client-print-hidden {
-            display: none !important;
-          }
-          body.client-pdf-export .techlead-executive-clients > :not(style):not(.client-presentation-container) {
-            display: none !important;
-          }
-          body.client-pdf-export .client-presentation-container {
-            break-inside: auto !important;
-            display: block !important;
-            width: 100% !important;
-            max-width: none !important;
-            margin: 0 !important;
-            border: 0 !important;
-            box-shadow: none !important;
-          }
-          body.client-pdf-export .client-presentation-container > .MuiAccordion-heading,
-          body.client-pdf-export .client-presentation-container .MuiAccordionSummary-root {
-            display: none !important;
-          }
-          body.client-pdf-export .client-presentation-container .MuiAccordionDetails-root {
-            display: block !important;
-            padding: 0 !important;
-          }
-          body.client-pdf-export .client-presentation-container .MuiCollapse-root {
-            height: auto !important;
-            visibility: visible !important;
-            overflow: visible !important;
-          }
-          body.client-pdf-export #client-export-content {
-            display: block !important;
-            overflow: visible !important;
-            break-inside: auto !important;
-            width: 100% !important;
-            margin: 0 !important;
-          }
-          body.client-pdf-export main {
-            padding: 0 !important;
-            margin: 0 !important;
-            min-height: auto !important;
-            overflow: visible !important;
-            background: #ffffff !important;
-          }
-          body.client-pdf-export main > div:last-child {
-            width: 100% !important;
-            max-width: none !important;
-          }
-          body.client-pdf-export .MuiCard-root,
-          body.client-pdf-export .MuiPaper-root {
-            break-inside: avoid;
-            box-shadow: none !important;
-          }
-          body.client-pdf-export #client-export-content {
-            border: 0 !important;
-            border-radius: 0 !important;
-            color: #111827 !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type {
-            min-height: 108px !important;
-            display: flex !important;
-            justify-content: center !important;
-            text-align: center !important;
-            background: #d1fae5 !important;
-            color: #064e3b !important;
-            border-radius: 12px !important;
-            margin-bottom: 12px !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiStack-root {
-            width: 100% !important;
-            justify-content: center !important;
-          }
-          body.client-pdf-export #client-export-content > .MuiBox-root:first-of-type .MuiBox-root {
-            width: 100% !important;
-          }
-          body.client-pdf-export .client-print-kpi-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            gap: 8px !important;
-          }
-          body.client-pdf-export .client-print-section-grid {
-            grid-template-columns: 1fr !important;
-            align-content: start !important;
-            gap: 10px !important;
-          }
-          body.client-pdf-export .client-print-page {
-            break-before: page;
-            break-inside: avoid;
-            width: 100% !important;
-            min-height: 0 !important;
-            padding-top: 3mm !important;
-          }
-          body.client-pdf-export .client-print-page .recharts-responsive-container {
-            width: 100% !important;
-            min-width: 0 !important;
-          }
-          body.client-pdf-export .client-print-page svg {
-            max-width: 100% !important;
-            overflow: visible !important;
-          }
-          body.client-pdf-export .client-print-page-title {
-            grid-column: 1 / -1 !important;
-            text-align: center !important;
-            margin: 0 0 8px !important;
-          }
-          body.client-pdf-export .client-print-conclusion {
-            grid-column: 1 / -1 !important;
-          }
-          body.client-pdf-export .client-print-continuation {
-            break-before: auto !important;
-            padding-top: 0 !important;
-          }
+          body.client-pdf-export .client-print-hidden,
+          body.client-pdf-export button { display: none !important; }
+          body.client-pdf-export main { margin: 0 !important; padding: 0 !important; overflow: visible !important; }
+          body.client-pdf-export main > div:last-child { width: 100% !important; max-width: none !important; }
+          body.client-pdf-export .techlead-executive-clients { width: 100% !important; max-width: none !important; color: #111827; }
+          body.client-pdf-export .MuiCard-root { box-shadow: none !important; overflow: visible !important; }
+          body.client-pdf-export [data-kpi-grid] { grid-template-columns: repeat(3,minmax(0,1fr)) !important; gap: 8px !important; }
+          body.client-pdf-export [data-kpi-card] { break-inside: avoid; }
+          body.client-pdf-export .client-print-page { break-inside: auto; margin-top: 12px; }
+          body.client-pdf-export .recharts-responsive-container { break-inside: avoid; }
+          body.client-pdf-export svg { max-width: 100% !important; overflow: visible !important; }
+          body.client-pdf-export .MuiTableContainer-root { overflow: visible !important; max-height: none !important; }
         }
       `}</style>
       {/* =================================================
@@ -1484,13 +1356,17 @@ export function Clients() {
             title={selectedClient || "Clientes"}
             description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
             meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
+            action={<Button className="client-print-hidden" variant="contained" startIcon={<PictureAsPdfOutlined/>}
+              disabled={exportingPresentation} onClick={()=>void exportClientPresentation()}>
+              {exportingPresentation?"Gerando PDF...":"Exportar PDF"}
+            </Button>}
           />
         </Box>
       </Stack>
 
 
       {/* Seleção rápida do cliente; critérios adicionais permanecem disponíveis sem ocupar a tela. */}
-      <Card elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:2.5,mb:2}}>
+      <Card className="client-print-hidden" elevation={0} sx={{border:"1px solid",borderColor:"divider",borderRadius:2.5,mb:2}}>
         <CardContent sx={{px:{xs:2,md:2.5},py:1.75,"&:last-child":{pb:1.75}}}>
           <Box sx={{
             display:"grid",
@@ -1590,22 +1466,21 @@ export function Clients() {
       {/* Pacote gerencial — análise semanal, comparativos e estoque de pendentes públicos */}
       <ClientMeetingInsights analysis={meetingAnalytics} tickets={clientOperationalTickets}
         selectedClient={selectedClient}
-        onOpenPresentation={()=>{setPresentationExpanded(true);window.setTimeout(()=>document.getElementById("client-export-content")?.scrollIntoView({behavior:"smooth",block:"start"}),350);}}
         onShowTickets={(title,ids,subtitle)=>{
           const selected=new Set(ids);
           showTickets(title,clientOperationalTickets.filter(ticket=>selected.has(ticket.id)),subtitle);
         }}/>
       
-      <Accordion disableGutters elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
-        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
+      <Card component="section" elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:3}}>
+        <Box sx={{px:2.3,py:2}}>
           <Box>
             <Typography sx={{fontWeight:800}}>Detalhamento operacional e histórico</Typography>
             <Typography variant="caption" color="text.secondary">
               Análise do intervalo selecionado, categorias, riscos e desenvolvimento vinculado
             </Typography>
           </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{pt:0,px:{xs:1.5,md:2}}}>
+        </Box>
+        <Box sx={{pt:0,px:{xs:1.5,md:2}}}>
       {/* Resumo operacional com as mesmas coortes do Dashboard */}
       <KpiGrid className="techlead-clients-primary-kpis" sx={{ mb: 2, maxWidth:440, gridTemplateColumns:"minmax(0,1fr)" }}>
         <MetricCard title="Fechados no período" value={clientOperationalCohorts.closed.length} description="Fechamento no intervalo"
@@ -1809,45 +1684,14 @@ export function Clients() {
         </CardContent>
       </Card>
 
-        </AccordionDetails>
-      </Accordion>
+        </Box>
+      </Card>
 
-      <Accordion className="client-presentation-container" expanded={presentationExpanded} onChange={(_,expanded)=>setPresentationExpanded(expanded)} disableGutters elevation={0} disabled={!selectedClient} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
-        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
-          <Box>
-            <Typography sx={{fontWeight:800}}>Apresentação para o cliente e exportação em PDF</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {selectedClient ? selectedClient+" · Apresentação executiva em seis páginas" : "Selecione um cliente para disponibilizar a apresentação"}
-            </Typography>
-          </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{p:1.5}}>
+      <Box component="section" sx={{mb:2}}>
       {/* PAINEL PARA APRESENTAÇÃO AO CLIENTE */}
-      {selectedClient && (
-        <Card id="client-export-content" ref={presentationRef} elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 2.25, mb: 2, overflow: "hidden", bgcolor: "background.default", "@media print": { breakInside: "avoid", "& .presentation-actions": { display: "none !important" } }, "&:fullscreen": { position: "fixed", inset: 0, width: "100vw", height: "100dvh", maxWidth: "none", borderRadius: 0, m: 0, zIndex: 99999, display: "flex", flexDirection: "column" } }}>
-          <Box sx={{ px: { xs: 2, md: 3 }, py: 2, color: "white", background: `linear-gradient(110deg, ${aliareColors.greenDark}, ${aliareColors.green})` }}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-              <Box>
-                <Typography variant="overline" sx={{ opacity: .85, fontWeight: 800 }}>Suporte e Sustentação</Typography>
-                <Typography sx={{ fontSize: { xs: "1.35rem", md: isPresenting ? "2.15rem" : "1.7rem" }, fontWeight: 900, lineHeight: 1.15 }}>{selectedClient}</Typography>
-                <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>
-                  {executiveArea || "Todas as frentes"} · {effectiveStartDate.toLocaleDateString("pt-BR")} a {effectiveEndDate.toLocaleDateString("pt-BR")}
-                </Typography>
-              </Box>
-              <Stack className="presentation-actions" direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                {isPresenting && <Typography variant="body2" sx={{ mr: 1, fontWeight: 800 }}>Página {presentationPage + 1} de 6</Typography>}
-                {!isPresenting && <Button variant="outlined" color="inherit" startIcon={<PictureAsPdfOutlined />} disabled={exportingPresentation} onClick={() => void exportClientPresentation()} sx={{ color: "white", borderColor: "rgba(255,255,255,.65)", "&:hover": { borderColor: "white", bgcolor: "rgba(255,255,255,.10)" } }}>
-                  {exportingPresentation ? "Gerando PDF..." : "Exportar PDF"}
-                </Button>}
-                <Button variant="contained" color="inherit" onClick={isPresenting ? () => void document.exitFullscreen() : () => void startPresentation()} startIcon={isPresenting ? <FullscreenExitOutlined /> : undefined} sx={{ color: aliareColors.greenDark, fontWeight: 800 }}>
-                  {isPresenting ? "Sair da apresentação" : "Apresentar em tela cheia"}
-                </Button>
-              </Stack>
-            </Stack>
-          </Box>
-
-          <CardContent sx={{ p: { xs: 1.5, md: isPresenting ? 3 : 2 }, flex: isPresenting ? 1 : undefined, overflow: isPresenting ? "hidden" : undefined, display: "flex", flexDirection: "column" }}>
-            {(!isPresenting || presentationPage === 0) && <Box sx={{ height: isPresenting ? "100%" : "auto", display: "flex", flexDirection: "column", justifyContent: isPresenting ? "center" : undefined }}>
+        <Box id="client-export-content" sx={{mb:2}}>
+          <CardContent sx={{ p: { xs: 1.5, md:2 }, display: "flex", flexDirection: "column" }}>
+            <Box sx={{ height:"auto", display: "flex", flexDirection: "column", justifyContent:"flex-start" }}>
               <Typography variant="h5" sx={{ fontWeight: 900, mb: 2 }}>Visão do intervalo selecionado</Typography>
               <KpiGrid className="client-print-kpi-grid" sx={{mb: 2}}>
                 <PresentationKpi title="Atendimentos" value={scopedTickets.length} detail="no período" color="#075985" onClick={() => showTickets("Atendimentos no foco", scopedTickets)} />
@@ -1861,14 +1705,9 @@ export function Clients() {
                 <Typography sx={{ fontWeight: 850 }}>Principais insights</Typography>
                 <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} variant="body1" sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 1) && <Box className="client-print-section-grid client-print-page"
-              sx={{mt:isPresenting?0:1.5,height:isPresenting?"100%":"auto",display:"flex",flexDirection:"column",gap:1}}>
-              <ClientMeetingPresentation analysis={meetingAnalytics} client={selectedClient}/>
-            </Box>}
-            
-            {(!isPresenting || presentationPage === 2) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Demanda e recorrência</Typography>
               <ExecutiveBarPanel title="Atendimentos por processo" data={presentationSummary.areas} onClick={(name) => showTickets(`Processo: ${name}`, scopedTickets.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
               <ExecutiveBarPanel title="Bugs por processo" data={presentationSummary.bugAreas} onClick={(name) => showTickets(`Bugs · ${name}`, presentationSummary.bugs.filter((ticket) => classifyExecutiveProcess(ticket) === name))} />
@@ -1877,32 +1716,32 @@ export function Clients() {
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>O processo com maior volume é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} atendimento(s). Entre os bugs, {presentationSummary.bugAreas[0]?.name ?? "nenhum processo"} concentra {presentationSummary.bugAreas[0]?.value ?? 0} ocorrência(s).</Typography>
                 <Typography sx={{ mt: 1.25, lineHeight: 1.65, color: "text.secondary" }}>Direcionamento: avaliar causa raiz, recorrência, necessidade de treinamento e oportunidade de correção preventiva nos processos mais representativos.</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 3) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Entregas e desenvolvimento</Typography>
               <ExecutiveDonutPanel title="Status das Tarefas" data={presentationSummary.taskStatuses} total={presentationSummary.taskItems.length} />
               <Box sx={{ p: 2.25, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Leitura das entregas</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{presentationSummary.taskItems.length} Task(s) relacionadas ao cliente, sendo {portfolioSummary.azureWithVersion} com versão informada, {portfolioSummary.azurePrioritized} priorizada(s) e {portfolioSummary.azureBlocked} com processo bloqueado.</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 4) && <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page client-print-continuation" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Pendências e encaminhamentos</Typography>
               <ExecutiveDonutPanel title="Status das pendências públicas atuais" data={meetingAnalytics.pendingByStatus} total={meetingAnalytics.pendingNow.length} />
               <Box sx={{ p: 2.25, borderRadius: 2, bgcolor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.10)" : "rgba(22,163,74,.08)", border: "1px solid", borderColor: meetingAnalytics.pendingNow.length ? "rgba(245,158,11,.28)" : "rgba(22,163,74,.22)" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>Pontos de atenção e encaminhamento</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.65 }}>{clientOperationalCohorts.backlog.length ? `${clientOperationalCohorts.backlog.length} ticket(s) público(s) permanecem pendentes no estoque atual, incluindo registros de meses anteriores. ${clientOperationalCohorts.backlog.filter(isBug).length} estão atualmente classificados como Bug e ${clientOperationalCohorts.backlog.filter((ticket) => normalize(ticket.justification).includes("cliente")).length} possuem justificativa relacionada ao cliente.` : "Não há pendências públicas ativas na carteira selecionada."}</Typography>
               </Box>
-            </Box>}
+            </Box>
 
-            {(!isPresenting || presentationPage === 5) && <Box className="client-print-section-grid client-print-page" sx={{ mt: isPresenting ? 0 : 1.5, height: isPresenting ? "100%" : "auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
+            <Box className="client-print-section-grid client-print-page" sx={{ mt:1.5, height:"auto", display: "grid", gridTemplateColumns: "1fr", gap: 2 }}>
               <Typography className="client-print-page-title" variant="h5" sx={{ fontWeight: 900 }}>Conclusão executiva</Typography>
               <Box className="client-print-conclusion" sx={{ p: 3, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
                 <Typography variant="h6" sx={{ fontWeight: 900, color: aliareColors.greenDark }}>Resumo do período</Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
-                  Foram analisados {scopedTickets.length} ticket(s) abertos no recorte de {selectedClient}, dos quais {portfolioSummary.resolutionRate.toFixed(1)}% estão atualmente resolvidos/fechados. Entre os tickets resolvidos no período, o SLA de solução medido foi de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e o tempo médio mensurável foi de {formatMinutes(solvedInPeriod.averageMinutes)} ({solvedInPeriod.measured} registros).
+                  Foram analisados {scopedTickets.length} ticket(s) abertos no recorte de {selectedClient || "toda a carteira SIMER"}, dos quais {portfolioSummary.resolutionRate.toFixed(1)}% estão atualmente resolvidos/fechados. Entre os tickets resolvidos no período, o SLA de solução medido foi de {formatSlaPercent(portfolioSummary.solutionSla.percent)} e o tempo médio mensurável foi de {formatMinutes(solvedInPeriod.averageMinutes)} ({solvedInPeriod.measured} registros).
                 </Typography>
                 <Typography sx={{ mt: 1.5, lineHeight: 1.75 }}>
                   O cliente possui {meetingAnalytics.pendingNow.length} pendência(s) pública(s) no estoque atual; no período de abertura, {presentationSummary.bugs.length} ticket(s) estão atualmente classificados como Bug e {presentationSummary.taskItems.length} Tarefa(s) estão vinculadas. O processo mais recorrente é {presentationSummary.areas[0]?.name ?? "não identificado"}, com {presentationSummary.areas[0]?.value ?? 0} ocorrência(s).
@@ -1918,30 +1757,22 @@ export function Clients() {
                 <Typography sx={{ fontWeight: 850 }}>Leitura para a direção</Typography>
                 <Stack spacing={1} sx={{ mt: 1.25 }}>{executiveInsights.slice(0, 5).map((item) => <Typography key={item} sx={{ lineHeight: 1.55 }}>• {item}</Typography>)}</Stack>
               </Box>
-            </Box>}
+            </Box>
 
-            {isPresenting && <Stack className="presentation-actions" direction="row" spacing={1.5} sx={{ mt: "auto", pt: 2, justifyContent: "space-between", alignItems: "center" }}>
-              <Button variant="outlined" color="inherit" startIcon={<ArrowBackOutlined />} disabled={presentationPage === 0} onClick={() => setPresentationPage((page) => Math.max(0, page - 1))}>Anterior</Button>
-              <Stack direction="row" spacing={0.75}>{[0, 1, 2, 3, 4, 5].map((page) => <Box key={page} onClick={() => setPresentationPage(page)} sx={{ width: page === presentationPage ? 28 : 9, height: 9, borderRadius: 5, bgcolor: page === presentationPage ? aliareColors.green : "divider", cursor: "pointer", transition: "all .2s" }} />)}</Stack>
-              <Button variant="contained" endIcon={<ArrowForwardOutlined />} disabled={presentationPage === 5} onClick={() => setPresentationPage((page) => Math.min(5, page + 1))}>Próxima</Button>
-            </Stack>}
           </CardContent>
-        </Card>
-      )}
+        </Box>
+      </Box>
 
-        </AccordionDetails>
-      </Accordion>
-
-      <Accordion disableGutters elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:"12px !important","&:before":{display:"none"}}}>
-        <AccordionSummary expandIcon={<ExpandMoreOutlined/>} sx={{px:2.3,minHeight:61}}>
+      <Card component="section" elevation={0} sx={{mb:2,border:"1px solid",borderColor:"divider",borderRadius:3}}>
+        <Box sx={{px:2.3,py:2}}>
           <Box>
             <Typography sx={{fontWeight:800}}>Distribuições complementares da carteira</Typography>
             <Typography variant="caption" color="text.secondary">
               Composição geral por cliente, categoria, situação e responsável, além de leituras automáticas do período
             </Typography>
           </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{p:{xs:1.5,md:2}}}>
+        </Box>
+        <Box sx={{p:{xs:1.5,md:2}}}>
       {/* Distribuições sem a implementação duplicada de PieChart/legend.
           Todos os campos são reversíveis, recalculam percentuais e abrem os tickets reais. */}
       <Box sx={{display:"grid",gridTemplateColumns:{xs:"1fr",lg:"1fr 1fr"},gap:2,mb:2}}>
@@ -1976,8 +1807,8 @@ export function Clients() {
         </Box>
       </ExecutiveSection>
 
-        </AccordionDetails>
-      </Accordion>
+        </Box>
+      </Card>
 
       {/* =================================================
           SEM DADOS
