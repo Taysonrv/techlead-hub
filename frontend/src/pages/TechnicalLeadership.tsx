@@ -225,42 +225,61 @@ export function TechnicalLeadership() {
 
   useEffect(() => {
     const entries = Object.entries(indicatorPeriods);
+    setIndicatorData({});
     setIndicatorErrors([]);
     if (!entries.length) return;
-    let active = true;
-    const requests = entries.map(async ([key, preset]) => {
-      if (preset === "custom" && (!customStart || !customEnd || customStart > customEnd)) return;
-      const range = resolvePeriod(preset, customStart, customEnd);
-      try {
-        const response = await api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } });
-        if (active) setIndicatorData((current) => ({ ...current, [key]: response.data.analytics }));
-      } catch {
-        if (active) setIndicatorErrors((current) => [...current, key]);
+    const controller = new AbortController();
+    const presets = [...new Set(entries.map(([, preset]) => preset))];
+    const validCustom = Boolean(customStart && customEnd && customStart <= customEnd);
+    for (const preset of presets) {
+      const keys = entries.filter(([, value]) => value === preset).map(([key]) => key);
+      if (preset === "custom" && !validCustom) {
+        setIndicatorErrors(current => [...current, ...keys]);
+        continue;
       }
-    });
-    void Promise.allSettled(requests);
-    return () => { active = false; };
+      const range = resolvePeriod(preset, customStart, customEnd);
+      void api.get<Data>("/workspace/technical-leadership", {
+        params: { client: client || undefined, user: user || undefined, ...range },
+        signal: controller.signal,
+      }).then(({ data: result }) => {
+        if (controller.signal.aborted) return;
+        setIndicatorData(current => ({
+          ...current,
+          ...Object.fromEntries(keys.map(key => [key, result.analytics])),
+        }));
+      }).catch(() => {
+        if (!controller.signal.aborted) setIndicatorErrors(current => [...current, ...keys]);
+      });
+    }
+    return () => controller.abort();
   }, [indicatorPeriods, client, user, customStart, customEnd, refreshVersion]);
 
   useEffect(() => {
-    setIndicatorData({});
     setIndicatorPeriods({});
-    setIndicatorErrors([]);
   }, [period, client, user]);
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
+    const controller = new AbortController();
     setData(null);
     setDrawer(null);
     setError("");
+    if (period === "custom" && (!customStart || !customEnd || customStart > customEnd)) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     const range = resolvePeriod(period, customStart, customEnd);
-    if (period === "custom" && (!customStart || !customEnd || customStart > customEnd)) { setData(null); setLoading(false); return () => { active = false; }; }
-    api.get<Data>("/workspace/technical-leadership", { params: { client: client || undefined, user: user || undefined, ...range } })
-      .then((response) => active && setData(response.data))
-      .catch(() => { if (active) { setData(null); setError("Não foi possível carregar a Central de Liderança Técnica."); } })
-      .finally(() => active && setLoading(false));
-    return () => { active = false; };
+    void api.get<Data>("/workspace/technical-leadership", {
+      params: { client: client || undefined, user: user || undefined, ...range },
+      signal: controller.signal,
+    }).then(({ data: result }) => {
+      if (!controller.signal.aborted) setData(result);
+    }).catch(() => {
+      if (!controller.signal.aborted) setError("Não foi possível carregar a Central de Liderança Técnica.");
+    }).finally(() => {
+      if (!controller.signal.aborted) setLoading(false);
+    });
+    return () => controller.abort();
   }, [client, user, period, customStart, customEnd, refreshVersion]);
 
   const attention = useMemo(() => data ? [

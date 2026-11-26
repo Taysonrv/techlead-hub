@@ -981,17 +981,17 @@ export function Dashboard() {
     {
       title: "Abertos no Período",
       value: summary.abertosNoPeriodo,
-      description: "Tickets abertos no período na base importada",
+      description: "Inclui tickets públicos e internos da base importada",
       severity: "default" as Severity,
       info: {
         title: "Abertos no Período",
-        summary: "Tickets com data de abertura no período, independentemente do responsável atual.",
+        summary: "Inclui tickets públicos e internos com data de abertura no período, independentemente do responsável atual.",
         calculation: "createdDate no período, sem restringir pelo responsável atual.",
         source: "Movidesk",
         reference: "Ticket.createdDate",
         periodRule: "Respeita integralmente o período global selecionado.",
       },
-      onClick: () => showTickets("Abertos no Período", openedInPeriod, "Tickets abertos no período na base importada"),
+      onClick: () => showTickets("Abertos no Período", openedInPeriod, "Inclui tickets públicos e internos da base importada"),
     },
     {
       title: "Pendentes no Período",

@@ -1,3 +1,4 @@
+import { prisma } from "../database/prisma";
 import {
   Router,
 } from "express";
@@ -190,6 +191,29 @@ routes.get(
   "/api/dashboard/tickets",
   requireAnyPermission("dashboard", "tickets", "attention", "clients", "performance", "coordination"),
   dashboard.tickets,
+);
+
+routes.get(
+  "/api/dashboard/source-freshness",
+  requireAnyPermission("dashboard"),
+  async (_request, response) => {
+    const [movidesk, azure] = await Promise.all([
+      prisma.importRun.findFirst({
+        where: { source: "MOVIDESK_API", status: "SUCCESS", finishedAt: { not: null } },
+        orderBy: { finishedAt: "desc" },
+        select: { finishedAt: true },
+      }),
+      prisma.azureSyncRun.findFirst({
+        where: { status: "SUCCESS", finishedAt: { not: null } },
+        orderBy: { finishedAt: "desc" },
+        select: { finishedAt: true },
+      }),
+    ]);
+    response.json({
+      movidesk: movidesk?.finishedAt ?? null,
+      azure: azure?.finishedAt ?? null,
+    });
+  },
 );
 
 routes.get(

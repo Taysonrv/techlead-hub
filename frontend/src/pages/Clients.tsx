@@ -3,7 +3,7 @@ import { ClientMeetingInsights } from "../components/ClientMeetingInsights";
 import { SelectableDonut, SelectableHorizontalBars } from "../components/ExecutiveChartControls";
 import { buildClientMeetingAnalytics } from "../utils/clientMeetingAnalytics";
 import { KpiGrid } from "../components/KpiGrid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -56,7 +56,7 @@ import {
 
 import { useNavigate } from "react-router-dom";
 
-import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
+import { useTicketSnapshot } from "../hooks/useTicketSnapshot";
 import { calculateTimestampSla } from "../utils/timestampSla";
 import { buildOperationalCohorts, isOperationallyOpen } from "../utils/operationalMetrics";
 import { useFilters } from "../context/FiltersContext";
@@ -212,15 +212,9 @@ export function Clients() {
   const navigate = useNavigate();
   const [exportingPresentation, setExportingPresentation] = useState(false);
 
-  const [tickets, setTickets] =
-    useState<Ticket[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState<string | null>(null);
-  const loadRequestRef = useRef<AbortController | null>(null);
+  const { data, loading, error, updatedAt, refresh } = useTicketSnapshot<Ticket>();
+  const tickets = useMemo(() => data ?? [], [data]);
+  const [printError, setPrintError] = useState<string | null>(null);
 
   /* Filtros locais */
 
@@ -265,42 +259,10 @@ export function Clients() {
     effectiveEndDate,
   } = useFilters();
 
-  useEffect(() => {
-    const controller = new AbortController();
-    loadRequestRef.current?.abort();
-    loadRequestRef.current = controller;
-
-    let refreshing = false;
-    async function loadTickets(initial = false) {
-      if (refreshing) return;
-      refreshing = true;
-      try {
-        if (initial) setLoading(true);
-        setError(null);
-        const snapshot = await getTicketSnapshot<Ticket>();
-        if (!controller.signal.aborted) {
-          setTickets(snapshot);
-          setError(getTicketSnapshotState().lastErrorAt ? "A atualização falhou. Exibindo os últimos dados disponíveis." : null);
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        console.error("Erro ao carregar indicadores dos clientes:", err);
-        setError("Não foi possível carregar os indicadores dos clientes.");
-      } finally {
-        refreshing = false;
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    }
-
-    void loadTickets(true);
-    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void loadTickets(); });
-    return () => { unsubscribe(); controller.abort(); };
-  }, []);
-
   async function exportClientPresentation() {
     if (exportingPresentation) return;
     setExportingPresentation(true);
-    setError(null);
+    setPrintError(null);
 
     const cleanup = () => {
       document.body.classList.remove("client-pdf-export");
@@ -318,7 +280,7 @@ export function Clients() {
         window.print();
       } catch {
         cleanup();
-        setError("Não foi possível abrir a impressão desta tela.");
+        setPrintError("Não foi possível abrir a impressão desta tela.");
       }
     }, 650);
   }
@@ -1294,12 +1256,13 @@ export function Clients() {
      LOADING / ERROR
   ======================================================= */
 
-  if (loading || (error && tickets.length === 0)) {
+  if (data === null) {
     return (
       <AsyncState
         status={loading ? "loading" : "error"}
         data={tickets}
         error={error}
+        onRetry={refresh}
         loading={<ContentState kind="loading" title="Carregando visão executiva" minHeight={360} />}
       >
         {() => null}
@@ -1359,7 +1322,11 @@ export function Clients() {
           CABEÇALHO
       ================================================= */}
 
-      {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && <Alert severity="warning" sx={{ mb: 2 }} action={<Button onClick={refresh} disabled={loading}>Tentar novamente</Button>}>{error}</Alert>}
+      {printError && <Alert severity="warning" sx={{ mb: 2 }} onClose={() => setPrintError(null)}>{printError}</Alert>}
+      {updatedAt && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+        Dados consultados em {updatedAt.toLocaleString("pt-BR")}
+      </Typography>}
       <Stack direction="row" spacing={2} sx={{ alignItems: "center", mb: 2.5, flexWrap: "wrap" }}>
         {selectedClient && (
           <Avatar variant="rounded" sx={{ width: 64, height: 64, bgcolor: aliareColors.greenDark, color: "white", fontSize: "1.1rem", fontWeight: 900, boxShadow: "0 10px 28px rgba(0,91,73,.22)" }}>
@@ -1373,7 +1340,7 @@ export function Clients() {
             description={selectedClient ? "Painel executivo do cliente: atendimento, SLA, demanda e desenvolvimento" : "Resultados da carteira, qualidade do atendimento e acompanhamento do desenvolvimento"}
             meta={<>{scopedTickets.length} ticket(s) analisado(s) no filtro atual</>}
             action={<Button className="client-print-hidden" variant="contained" startIcon={<PictureAsPdfOutlined/>}
-              disabled={exportingPresentation} onClick={()=>void exportClientPresentation()}>
+              disabled={exportingPresentation || loading || tickets.length === 0} onClick={()=>void exportClientPresentation()}>
               {exportingPresentation?"Gerando PDF...":"Exportar PDF"}
             </Button>}
           />

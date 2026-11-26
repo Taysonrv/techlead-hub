@@ -15,7 +15,15 @@ export function useVisiblePolling(refresh: () => void | Promise<void>, intervalM
       if (now - lastRunRef.current < (force ? 3_000 : intervalMs - 1_000)) return;
       lastRunRef.current = now;
       running = true;
-      Promise.resolve(refreshRef.current()).catch(() => undefined).finally(() => { running = false; });
+      void (async () => {
+        try {
+          await refreshRef.current();
+        } catch {
+          // A failed background refresh should allow the next poll to run.
+        } finally {
+          running = false;
+        }
+      })();
     };
     const onVisibility = () => { if (document.visibilityState === "visible") run(true); };
     const onFocus = () => run(true);

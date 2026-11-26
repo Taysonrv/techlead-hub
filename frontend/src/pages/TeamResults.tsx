@@ -1,3 +1,4 @@
+import { api } from "../services/api";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { buildTeamResults, type TeamTimelineBucket } from "../utils/teamResultsAnalytics";
 import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "../components/ExecutiveChartControls";
@@ -6,8 +7,9 @@ import { KpiGrid } from "../components/KpiGrid";
 import { semanticChartColors } from "../theme/chartPalette";
 import { TicketDrilldownExplorer } from "../components/TicketDrilldownExplorer";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, CircularProgress, Drawer, IconButton } from "@mui/material";
-import { getTicketSnapshot, getTicketSnapshotState, subscribeTicketSnapshotRefresh } from "../services/ticketSnapshot";
+import { Box, Button, Chip, FormControl, MenuItem, Select, Stack, TextField, Typography, Alert, Drawer, IconButton } from "@mui/material";
+import { useTicketSnapshot } from "../hooks/useTicketSnapshot";
+import { ContentState } from "../components/ContentState";
 import { isTicketCancelled } from "../utils/operationalMetrics";
 import { FavoriteAction } from "../components/FavoriteAction";
 import { SectionInfo } from "../components/SectionInfo";
@@ -142,11 +144,27 @@ function Metric({ title, value, subtitle, onClick }: { title: string; value: str
     icon={metricIcons[title]} accent={title.startsWith("SLA")&&typeof value==="string"&&value!=="—"?(parseFloat(value.replace(",","."))>=90?semanticChartColors.positive:parseFloat(value.replace(",","."))>=80?semanticChartColors.attention:semanticChartColors.overdue):(metricAccents[title] || "#18C77A")} onClick={onClick} />;
 }
 export default function TeamResults() {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const { data, updatedAt, checkedAt, loading, error, refresh } = useTicketSnapshot<Ticket>();
+  const [sourceDates, setSourceDates] = useState<{ movidesk: string | null; azure: string | null }>();
+  const [sourceError, setSourceError] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    const controller = new AbortController();
+    void api.get<{ movidesk: string | null; azure: string | null }>("/dashboard/source-freshness", {
+      signal: controller.signal,
+    }).then(({ data }) => {
+      if (controller.signal.aborted) return;
+      setSourceDates(data);
+      setSourceError(false);
+    }).catch(() => {
+      if (!controller.signal.aborted) setSourceError(true);
+    });
+    return () => controller.abort();
+  }, [loading]);
+
+  const tickets = useMemo(() => data ?? [], [data]);
   const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
-  const [updatedAt,setUpdatedAt]=useState<Date|null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("week");
   const [startInput, setStartInput] = useState("");
   const [endInput, setEndInput] = useState("");
@@ -158,28 +176,10 @@ export default function TeamResults() {
   const jump = (index: number) => { const next = Math.max(0, Math.min(sections.length - 1, index)); setSectionIndex(next); document.getElementById(sections[next])?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   useEffect(() => { const update = () => setPresentation(document.fullscreenElement === presentationRef.current); document.addEventListener("fullscreenchange", update); return () => document.removeEventListener("fullscreenchange", update); }, []);
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      try {
-        const data = await getTicketSnapshot<Ticket>();
-        if (!active) return;
-        setTickets(data);
-        setUpdatedAt(new Date());
-        setError(getTicketSnapshotState().lastErrorAt ? "Exibindo dados em cache: a última atualização falhou." : null);
-      } catch {
-        if (active) setError("Não foi possível carregar os dados da equipe.");
-      } finally { if (active) setLoading(false); }
-    };
-    void load();
-    const unsubscribe = subscribeTicketSnapshotRefresh(() => { void load(); });
-    return () => { active = false; unsubscribe(); };
-  }, []);
-
-  const range = useMemo(() => rangeFor(period, startInput, endInput,updatedAt??new Date()), [period, startInput, endInput, updatedAt]);
+  const range = useMemo(() => rangeFor(period, startInput, endInput, new Date(checkedAt)), [period, startInput, endInput, checkedAt]);
   const owners = useMemo(() => [...new Set(tickets.filter(t=>t.isWithSimer===true&&t.ticketType===2).map(t => t.owner?.trim()).filter((v): v is string => Boolean(v)))].sort((a,b) => a.localeCompare(b,"pt-BR")), [tickets]);
   const scope = useMemo(() => tickets.filter(t => t.isWithSimer===true&&(owner === "all" || t.owner?.trim() === owner)), [tickets, owner]);
-  const results = useMemo(() => range?buildTeamResults(scope,range.start,range.end):null,[scope,range]);
+  const results = useMemo(() => data!==null&&data.length>0&&range?buildTeamResults(scope,range.start,range.end):null,[data,scope,range]);
 
   const distributions = useMemo(() => {
     if (!results) return [];
@@ -231,14 +231,15 @@ export default function TeamResults() {
     `${current >= previous ? "+" : ""}${((current - previous) / previous * 100).toFixed(1).replace(".", ",")}%`;
   return <Box ref={presentationRef} sx={{ px: { xs: 2, md: 3 }, py: 3, maxWidth: 1920, mx: "auto", bgcolor: "background.default", color: "text.primary", overflowY: presentation ? "auto" : "visible", height: presentation ? "100vh" : "auto", "& .recharts-wrapper": { maxWidth: "100%" }, "@media print": { maxWidth: "none", p: 1, overflow: "visible", height: "auto", "& .MuiCard-root": { breakInside: "avoid" } } }}>
     <PageHeader eyebrow="INTELIGÊNCIA OPERACIONAL • REUNIÃO SEMANAL" title="Resultados da Equipe"
-      description="Painel executivo de produtividade, carteira, qualidade e compromissos da operação"
+      description="Painel executivo de produtividade, carteira, qualidade e entregas da operação"
       meta={<Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap" }}>
         <Chip size="small" icon={<GroupsOutlined />} label={owner === "all" ? "Equipe completa" : owner} variant="outlined" />
         {range && <Chip size="small" icon={<CalendarMonthOutlined />} label={range.start.toLocaleDateString("pt-BR") + " — " + range.end.toLocaleDateString("pt-BR")} variant="outlined" />}
       </Stack>}
       action={<Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ "@media print": { display: "none" } }}>
-        <Button variant="outlined" startIcon={<FileDownloadOutlined />} onClick={printReport}>Exportar PDF</Button>
-        <Button variant="contained" startIcon={presentation ? <TrendingUpOutlined /> : <PresentToAllOutlined />} onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Apresentar"}</Button>
+        <Button variant="text" disabled={loading} onClick={refresh}>{loading ? "Atualizando..." : "Atualizar dados"}</Button>
+        <Button variant="outlined" disabled={!results || loading} startIcon={<FileDownloadOutlined />} onClick={printReport}>Exportar PDF</Button>
+        <Button variant="contained" disabled={!results} startIcon={presentation ? <TrendingUpOutlined /> : <PresentToAllOutlined />} onClick={() => void togglePresentation()}>{presentation ? "Sair da apresentação" : "Apresentar"}</Button>
       </Stack>} />
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 3, p: { xs: 1.5, md: 2 }, border: "1px solid", borderColor: "divider", borderRadius: "var(--hub-radius-lg)", bgcolor: "background.paper", boxShadow: "var(--hub-shadow-card)", alignItems: { sm: "center" }, flexWrap: "wrap", "& .MuiOutlinedInput-root": { borderRadius: 2 } }}>
       <FormControl size="small" sx={{ minWidth: 180 }}><Select aria-label="Período dos resultados" value={period} onChange={e => setPeriod(e.target.value as Period)}>
@@ -251,13 +252,29 @@ export default function TeamResults() {
       {range && <Chip label={`${range.start.toLocaleDateString("pt-BR")} a ${range.end.toLocaleDateString("pt-BR")}`} />}
     </Stack>
     {presentation && <Stack direction="row" spacing={1} sx={{ position: "sticky", top: 0, zIndex: 5, bgcolor: "background.paper", p: 1, borderRadius: 2, mb: 2, justifyContent: "space-between", "@media print": { display: "none" } }}><Button size="small" disabled={sectionIndex === 0} onClick={() => jump(sectionIndex - 1)}>Anterior</Button><Typography variant="body2" sx={{ alignSelf: "center" }}>Seção {sectionIndex + 1} de {sections.length}</Typography><Button size="small" disabled={sectionIndex === sections.length - 1} onClick={() => jump(sectionIndex + 1)}>Próxima</Button></Stack>}
-    {loading && <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 2 }}><CircularProgress size={18} /><Typography>Carregando resultados...</Typography></Stack>}
-    {error && <Alert severity="warning" sx={{ mb: 2 }}>{error}</Alert>}
+    {loading && data === null && <ContentState kind="loading" title="Carregando resultados da equipe" />}
+    {error && data === null && !loading && <ContentState kind="error" description={error} onRetry={refresh} />}
+    {error && data !== null && <Alert severity="warning" sx={{ mb: 2 }} action={<Button color="inherit" disabled={loading} onClick={refresh}>Tentar novamente</Button>}>
+      {error} {updatedAt && `Última consulta concluída: ${updatedAt.toLocaleString("pt-BR")}.`}
+    </Alert>}
+    {data !== null && data.length === 0 && !loading && !error && <ContentState kind="empty" title="Nenhum ticket disponível na base" description="Verifique a sincronização e a importação antes de analisar os resultados." />}
     {!range && <Alert severity="info">Selecione um intervalo personalizado válido para apresentar os resultados.</Alert>}
     {results && <>
       <Alert severity="info" icon={<AssessmentOutlined/>} sx={{mb:2}}>
         <Typography variant="body2"><b>{results.resolved.length}</b> resoluções para <b>{results.opened.length}</b> entradas no intervalo; <b>{results.backlog.length}</b> pendências públicas no estoque atual.</Typography>
-        <Typography variant="caption">Equipe SIMER · {updatedAt?"Consulta atualizada em "+updatedAt.toLocaleString("pt-BR"):"Aguardando atualização"}. Resoluções e fechamentos são eventos distintos e não devem ser somados.</Typography>
+        <Typography variant="caption">Equipe SIMER · {updatedAt?"Dados consultados em "+updatedAt.toLocaleString("pt-BR"):"Aguardando atualização"}. Resoluções e fechamentos são eventos distintos e não devem ser somados.</Typography>
+        <Stack direction="row" sx={{ flexWrap: "wrap", columnGap: 2, rowGap: 0.5, mt: 0.5 }}>
+          {sourceError ? (
+            <Typography variant="caption">Horários das fontes temporariamente indisponíveis.</Typography>
+          ) : sourceDates ? (
+            <>
+              <Typography variant="caption">Última importação pela API Movidesk: {sourceDates.movidesk ? new Date(sourceDates.movidesk).toLocaleString("pt-BR") : "sem sucesso registrado"}</Typography>
+              <Typography variant="caption">Última sincronização Azure: {sourceDates.azure ? new Date(sourceDates.azure).toLocaleString("pt-BR") : "sem sucesso registrado"}</Typography>
+            </>
+          ) : (
+            <Typography variant="caption">Consultando horários das fontes…</Typography>
+          )}
+        </Stack>
       </Alert>
       {results.missingType > 0 && <Alert severity="info" sx={{ mb: 2 }}>{results.missingType} tickets pendentes sem classificação público/interno foram excluídos das métricas públicas. Confira a importação antes da reunião.</Alert>}
       <KpiGrid sx={{gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))"},mb:2}}>
