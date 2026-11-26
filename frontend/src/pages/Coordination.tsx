@@ -169,6 +169,17 @@ export function Coordination() {
   const [csatDetail, setCsatDetail] = useState<CsatDetail | null>(null);
   const [csatDetailTitle, setCsatDetailTitle] = useState("");
   const [csatDetailLoading, setCsatDetailLoading] = useState(false);
+  const [csatDetailError, setCsatDetailError] = useState("");
+  const csatDetailRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => csatDetailRequest.current?.abort(), []);
+
+  function closeCsatDetails() {
+    csatDetailRequest.current?.abort();
+    setCsatDetailTitle("");
+    setCsatDetail(null);
+    setCsatDetailError("");
+    setCsatDetailLoading(false);
+  }
   const [integrationDrawerOpen, setIntegrationDrawerOpen] = useState(false);
   const [integrationDetailKey, setIntegrationDetailKey] = useState<"tickets" | "links" | "azure" | "services">("tickets");
   const [slaComponentDetail, setSlaComponentDetail] = useState<{label:string;detail:string;weight:number;score:number}|null>(null);
@@ -311,12 +322,25 @@ export function Coordination() {
     setSlaDetail({ title, rows:slaDevelopment.rows.filter((row)=>idSet.has(row.movideskId)) });
   }
 
-  async function openCsatDetails(title:string, params:Record<string,string|number>) {
+  async function openCsatDetails(title: string, params: Record<string, string | number>) {
+    csatDetailRequest.current?.abort();
+    const controller = new AbortController();
+    csatDetailRequest.current = controller;
+    setCsatDetailTitle(title);
+    setCsatDetail(null);
+    setCsatDetailError("");
+    setCsatDetailLoading(true);
     try {
-      setCsatDetailTitle(title); setCsatDetail(null); setCsatDetailLoading(true);
-      const response=await api.get<CsatDetail>("/coordination/csat/details",{params:{days:serviceDays || 730,...params}});
-      setCsatDetail(response.data);
-    } finally { setCsatDetailLoading(false); }
+      const response = await api.get<CsatDetail>("/coordination/csat/details", {
+        params: { days: serviceDays || 730, ...params },
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) setCsatDetail(response.data);
+    } catch {
+      if (!controller.signal.aborted) setCsatDetailError("Não foi possível carregar as avaliações deste recorte.");
+    } finally {
+      if (!controller.signal.aborted) setCsatDetailLoading(false);
+    }
   }
 
   async function openDetails(kind: DetailKind, title: string, analyst?: string, serviceModule?: string, serviceClient?: string, serviceName?: string) {
@@ -899,8 +923,10 @@ export function Coordination() {
         <DetailPanelHeader eyebrow="SLA × OLA" title={slaDetail?.title ?? "Detalhes"} identifier={slaDetail ? `${slaDetail.rows.length} item(ns)` : undefined} onClose={()=>setSlaDetail(null)} />
         <Stack spacing={1.2} sx={{ p:2 }}>{slaDetail?.rows.map((row)=><Button key={row.movideskId} variant="outlined" onClick={()=>navigate(`/tickets?movidesk=${row.movideskId}`)} sx={{ textTransform:"none", textAlign:"left", justifyContent:"flex-start", p:1.25 }}><Box><Typography sx={{fontWeight:800}}>#{row.movideskId} · {row.subject}</Typography><Typography variant="caption" color="text.secondary">{[row.client,row.owner,row.urgency,`Task #${row.taskNumber}`].filter(Boolean).join(" · ")}</Typography><Typography variant="caption" sx={{display:"block",mt:.35}}>Suporte {formatHours(row.supportMinutes)} · Desenvolvimento {formatHours(row.factoryMinutes ?? 0)} · Total {formatHours(row.totalMinutes ?? 0)}</Typography></Box></Button>)}</Stack>
       </Drawer>
-      <Drawer anchor="right" open={Boolean(csatDetailTitle)} onClose={()=>{setCsatDetailTitle("");setCsatDetail(null)}} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
-        <DetailPanelHeader eyebrow="CSAT" title={csatDetailTitle || "Avaliações"} identifier={csatDetail ? `${csatDetail.total} resposta(s)` : undefined} onClose={()=>{setCsatDetailTitle("");setCsatDetail(null)}} />
+      <Drawer anchor="right" open={Boolean(csatDetailTitle)} onClose={closeCsatDetails} slotProps={{ paper:{ sx:detailDrawerPaperSx } }}>
+        <DetailPanelHeader eyebrow="CSAT" title={csatDetailTitle || "Avaliações"} identifier={csatDetail ? `${csatDetail.total} resposta(s)` : undefined} onClose={closeCsatDetails} />
+        {csatDetailError && <Alert severity="error" sx={{ m: 2 }}>{csatDetailError}</Alert>}
+        {csatDetail && csatDetail.items.length === 0 && <Alert severity="info" sx={{ m: 2 }}>Nenhuma avaliação neste recorte.</Alert>}
         {csatDetailLoading ? <Box sx={{py:8,display:"grid",placeItems:"center"}}><CircularProgress/></Box> : <Stack spacing={1.2} sx={{p:2}}>{csatDetail?.items.map((item)=><Button key={item.id} variant="outlined" onClick={()=>item.ticketId&&navigate(`/tickets?movidesk=${item.ticketId}`)} sx={{textTransform:"none",textAlign:"left",justifyContent:"flex-start",p:1.25}}><Box><Stack direction="row" spacing={1} sx={{alignItems:"center"}}><Typography sx={{fontWeight:800}}>#{item.ticketId} · {item.subject}</Typography><Chip size="small" label={item.value ?? "—"}/></Stack><Typography variant="caption" color="text.secondary">{[item.client,item.owner,item.service].filter(Boolean).join(" · ")}</Typography>{item.commentary&&<Typography variant="body2" sx={{mt:.65}}>{item.commentary}</Typography>}</Box></Button>)}{csatDetail?.truncated&&<Alert severity="info">Recorte limitado aos 500 registros mais recentes.</Alert>}</Stack>}
       </Drawer>
       <Drawer anchor="right" open={Boolean(detailTitle)} onClose={() => { setDetailTitle(""); setDetails(null); setDetailError(""); }} slotProps={{ paper: { sx: detailDrawerPaperSx } }}>

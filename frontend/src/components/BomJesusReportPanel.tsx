@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BomJesusExecutiveDashboard, type BomJesusExecutiveAudit } from "./BomJesusExecutiveDashboard";
 import { ClientManagementOverview, ClientManagementRankings, ClientManagementTickets, ClientManagementPivot, type ClientManagementTicket, type ClientInspect } from "./ClientManagementViews";
 import { TicketDrilldownExplorer } from "./TicketDrilldownExplorer";
@@ -81,7 +81,12 @@ export function ClientExecutiveReportPanel() {
       startDate:preset==="custom"?previous.startDate:start,
       endDate:preset==="custom"?previous.endDate:today}));
   };
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const reportRequest = useRef<AbortController | null>(null);
+  const load = useCallback(async () => {
+    reportRequest.current?.abort();
+    const controller = new AbortController();
+    reportRequest.current = controller;
+    const { signal } = controller;
     setLoading(true);setError("");setReport(null);setInsight(null);
     try {
       const result = await api.get<Report>("/coordination/client-executive-report", { params: { client,startDate, endDate, slaTier }, signal });
@@ -89,7 +94,7 @@ export function ClientExecutiveReportPanel() {
     } catch (e) { if (!signal?.aborted) { setError(getApiErrorMessage(e, "Falha ao carregar relatório.")); setReport(null); } }
     finally { if (!signal?.aborted) setLoading(false); }
   }, [client,startDate, endDate, slaTier]);
-  useEffect(() => { const controller = new AbortController(); void load(controller.signal); return () => controller.abort(); }, [load]);
+  useEffect(() => { void load(); return () => reportRequest.current?.abort(); }, [load]);
   const download = async () => {
     setExporting(true); setError("");
     try {
