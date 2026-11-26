@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import { api } from "../services/api";
+import { api, getApiErrorMessage } from "../services/api";
 
 type Key = "CAUSES" | "INTERNAL_ESCALATION" | "KNOWLEDGE" | "EXTERNAL_ESCALATION";
 type Status = "PLANNED" | "IN_PROGRESS" | "VERIFIED" | "CANCELLED";
@@ -19,35 +19,41 @@ export function LeadershipOkrPanel() {
   const [items, setItems] = useState<RecordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [loaded, setLoaded] = useState(false);
   const [dialog, setDialog] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormData>(empty);
   const [saving, setSaving] = useState(false);
   const load = async () => {
+    setLoading(true);
     try {
       const response = await api.get<RecordItem[]>("/leadership/okrs");
       setItems(response.data);
+      setLoaded(true);
       setError("");
     } catch { setError("Não foi possível carregar as evidências. Verifique a conexão e as permissões."); }
     finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
   const open = (key: Key, item?: RecordItem) => {
+    setSaveError("");
     setEditingId(item?.id ?? null);
     setForm(item ? { deliverable: item.deliverable, title: item.title, description: item.description, owner: item.owner, status: item.status, evidenceUrl: item.evidenceUrl || "", dueDate: item.dueDate?.slice(0, 10) || "" } : { ...empty, deliverable: key });
     setDialog(true);
   };
   const save = async () => {
     if (!form.title.trim() || !form.description.trim() || !form.owner.trim() || (form.status === "VERIFIED" && !form.evidenceUrl.trim())) {
-      setError("Informe título, descrição, responsável e, para evidência validada, o link de comprovação."); return;
+      setSaveError("Informe título, descrição, responsável e, para evidência validada, o link de comprovação."); return;
     }
+    setSaveError("");
     setSaving(true);
     try {
       const payload = { ...form, dueDate: form.dueDate || null, evidenceUrl: form.evidenceUrl || null };
       if (editingId) await api.put("/leadership/okrs/" + editingId, payload);
       else await api.post("/leadership/okrs", payload);
       setDialog(false); setError(""); await load();
-    } catch { setError("Não foi possível salvar. Apenas administradores e coordenadores podem alterar registros."); }
+    } catch (error) { setSaveError(getApiErrorMessage(error, "Não foi possível salvar o registro.")); }
     finally { setSaving(false); }
   };
   const verified = items.filter(item => item.status === "VERIFIED");
@@ -58,14 +64,14 @@ export function LeadershipOkrPanel() {
     <Card variant="outlined"><CardContent>
       <Typography variant="h6" sx={{ fontWeight: 850 }}>OKRs · Qualidade e melhoria contínua</Typography>
       <Typography variant="body2" color="text.secondary">Objetivo: tornar o Suporte mais resolutivo, previsível e autônomo. Prazo: 31/12/2026. Os quatro entregáveis apresentados somam 18 pontos de peso; o progresso abaixo é documental, não uma nota oficial do OKR.</Typography>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: 1.5 }}>
+      {loaded && <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", mt: 1.5 }}>
         <Chip color="primary" label={items.length + " registros de acompanhamento"} />
         <Chip color="success" variant="outlined" label={verified.length + " evidências validadas"} />
         <Chip variant="outlined" label={items.filter(item => item.status === "IN_PROGRESS").length + " em andamento"} />
         <Chip color={overdue.length ? "warning" : "default"} variant="outlined" label={overdue.length + " ações em atraso"} />
-      </Stack>
+      </Stack>}
     </CardContent></Card>
-    {error && <Alert severity="warning" onClose={() => setError("")}>{error}</Alert>}
+    {error && <Alert severity="warning" action={<Button color="inherit" disabled={loading} onClick={() => void load()}>Tentar novamente</Button>}>{error}</Alert>}
     {loading && <Typography color="text.secondary">Carregando evidências...</Typography>}
     {!loading && overdue.length > 0 && <Alert severity="warning">{overdue.length} ação(ões) com prazo vencido e ainda sem validação. Revise responsáveis, prazos e evidências.</Alert>}
     {!loading && withoutOwner.length > 0 && <Alert severity="info">{withoutOwner.length} registro(s) sem responsável identificado.</Alert>}
@@ -103,6 +109,7 @@ export function LeadershipOkrPanel() {
     <Dialog open={dialog} onClose={() => !saving && setDialog(false)} fullWidth maxWidth="sm">
       <DialogTitle>{editingId ? "Atualizar acompanhamento" : "Registrar ação ou evidência"}</DialogTitle>
       <DialogContent><Stack spacing={2} sx={{ mt: 1 }}>
+        {saveError && <Alert severity="error">{saveError}</Alert>}
         <TextField select size="small" label="Entregável" value={form.deliverable} onChange={e => setForm({ ...form, deliverable: e.target.value as Key })}>{definitions.map(def => <MenuItem key={def.key} value={def.key}>{def.title}</MenuItem>)}</TextField>
         <TextField size="small" label="Título" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} slotProps={{ htmlInput: { maxLength: 200 } }} />
         <TextField size="small" multiline minRows={3} label="Análise, ação executada e resultado observado" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
