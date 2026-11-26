@@ -1,3 +1,4 @@
+import { api } from "../services/api";
 import { ExportTicketsButton } from "../components/ExportTicketsButton";
 import { buildTeamResults, type TeamTimelineBucket } from "../utils/teamResultsAnalytics";
 import { SelectableDonut, SelectableHorizontalBars, SelectableLines } from "../components/ExecutiveChartControls";
@@ -144,6 +145,24 @@ function Metric({ title, value, subtitle, onClick }: { title: string; value: str
 }
 export default function TeamResults() {
   const { data, updatedAt, checkedAt, loading, error, refresh } = useTicketSnapshot<Ticket>();
+  const [sourceDates, setSourceDates] = useState<{ movidesk: string | null; azure: string | null }>();
+  const [sourceError, setSourceError] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+    const controller = new AbortController();
+    void api.get<{ movidesk: string | null; azure: string | null }>("/dashboard/source-freshness", {
+      signal: controller.signal,
+    }).then(({ data }) => {
+      if (controller.signal.aborted) return;
+      setSourceDates(data);
+      setSourceError(false);
+    }).catch(() => {
+      if (!controller.signal.aborted) setSourceError(true);
+    });
+    return () => controller.abort();
+  }, [loading]);
+
   const tickets = useMemo(() => data ?? [], [data]);
   const [detail, setDetail] = useState<{ title: string; tickets: Ticket[] } | null>(null);
   const [period, setPeriod] = useState<Period>("week");
@@ -244,6 +263,18 @@ export default function TeamResults() {
       <Alert severity="info" icon={<AssessmentOutlined/>} sx={{mb:2}}>
         <Typography variant="body2"><b>{results.resolved.length}</b> resoluções para <b>{results.opened.length}</b> entradas no intervalo; <b>{results.backlog.length}</b> pendências públicas no estoque atual.</Typography>
         <Typography variant="caption">Equipe SIMER · {updatedAt?"Dados consultados em "+updatedAt.toLocaleString("pt-BR"):"Aguardando atualização"}. Resoluções e fechamentos são eventos distintos e não devem ser somados.</Typography>
+        <Stack direction="row" sx={{ flexWrap: "wrap", columnGap: 2, rowGap: 0.5, mt: 0.5 }}>
+          {sourceError ? (
+            <Typography variant="caption">Horários das fontes temporariamente indisponíveis.</Typography>
+          ) : sourceDates ? (
+            <>
+              <Typography variant="caption">Última importação pela API Movidesk: {sourceDates.movidesk ? new Date(sourceDates.movidesk).toLocaleString("pt-BR") : "sem sucesso registrado"}</Typography>
+              <Typography variant="caption">Última sincronização Azure: {sourceDates.azure ? new Date(sourceDates.azure).toLocaleString("pt-BR") : "sem sucesso registrado"}</Typography>
+            </>
+          ) : (
+            <Typography variant="caption">Consultando horários das fontes…</Typography>
+          )}
+        </Stack>
       </Alert>
       {results.missingType > 0 && <Alert severity="info" sx={{ mb: 2 }}>{results.missingType} tickets pendentes sem classificação público/interno foram excluídos das métricas públicas. Confira a importação antes da reunião.</Alert>}
       <KpiGrid sx={{gridTemplateColumns:{xs:"1fr",sm:"repeat(2,minmax(0,1fr))",lg:"repeat(3,minmax(0,1fr))"},mb:2}}>
