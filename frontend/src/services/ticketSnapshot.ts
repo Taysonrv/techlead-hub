@@ -3,6 +3,7 @@ import { SnapshotCache } from "./snapshotCache";
 
 const cache = new SnapshotCache<unknown>(async () => {
   const response = await api.get<unknown[]>("/dashboard/tickets", { timeout: 60_000 });
+  if (!Array.isArray(response.data)) throw new Error("A consulta de tickets retornou uma resposta inválida.");
   return response.data;
 });
 

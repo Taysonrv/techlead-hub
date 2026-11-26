@@ -1,4 +1,5 @@
 /* oxlint-disable react/only-export-components -- provider/hook/helper exports are intentional in this module */
+import { isCancel } from "axios";
 import {
   createContext,
   useCallback,
@@ -214,12 +215,15 @@ export function AuthProvider({
           const currentUser =
             response.data.user;
 
+          if (getAccessToken() !== token) return null;
+
           setUser(
             currentUser
           );
 
           return currentUser;
-        } catch {
+        } catch (error) {
+          if (isCancel(error) || getAccessToken() !== token) return null;
           clearSession();
 
           return null;

@@ -23,6 +23,22 @@ const API_URL =
 const ACCESS_TOKEN_KEY =
   "techlead-hub.access-token";
 
+declare module "axios" {
+  interface InternalAxiosRequestConfig {
+    hubSessionGeneration?: number;
+  }
+}
+
+let sessionGeneration = 0;
+function notifySessionChanged() {
+  sessionGeneration++;
+  window.dispatchEvent(new Event("techlead-hub:session-changed"));
+}
+
+function obsoleteRequest(config?: InternalAxiosRequestConfig) {
+  return config?.hubSessionGeneration !== undefined && config.hubSessionGeneration !== sessionGeneration;
+}
+
 /* =========================================================
    STORAGE DA SESSÃO
 ========================================================= */
@@ -55,7 +71,7 @@ export function setAccessToken(
       ACCESS_TOKEN_KEY,
       token
     );
-    if (!sameSession) window.dispatchEvent(new Event("techlead-hub:session-changed"));
+    if (!sameSession) notifySessionChanged();
   } catch {
     console.warn(
       "[auth] Não foi possível armazenar o token."
@@ -69,7 +85,7 @@ export function removeAccessToken() {
       ACCESS_TOKEN_KEY
     );
     localStorage.removeItem(ACCESS_TOKEN_KEY);
-    window.dispatchEvent(new Event("techlead-hub:session-changed"));
+    notifySessionChanged();
   } catch {
     console.warn(
       "[auth] Não foi possível remover o token."
@@ -133,6 +149,7 @@ api.interceptors.request.use(
     }
 
     config.headers["X-Request-Id"] = cryptoRequestId();
+    config.hubSessionGeneration = sessionGeneration;
 
     return config;
   },
@@ -149,6 +166,10 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
+    // A response from a previous login must never populate the new user's screen.
+    if (obsoleteRequest(response.config)) {
+      return Promise.reject(new axios.CanceledError("A sessão mudou durante a consulta.", response.config));
+    }
     backendAvailability.reportSuccess();
     return response;
   },
@@ -157,6 +178,9 @@ api.interceptors.response.use(
     error:
       AxiosError
   ) => {
+    if (obsoleteRequest(error.config)) {
+      return Promise.reject(new axios.CanceledError("A sessão mudou durante a consulta.", error.config));
+    }
     const status =
       error.response
         ?.status;
@@ -205,7 +229,8 @@ api.interceptors.response.use(
 
     if (
       authFailure &&
-      !isLoginRequest
+      !isLoginRequest &&
+      error.config?.headers.Authorization === `Bearer ${getAccessToken()}`
     ) {
       removeAccessToken();
 

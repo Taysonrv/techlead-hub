@@ -25,7 +25,13 @@ export class SnapshotCache<T> {
   }
 
   get(): Promise<T[]> {
-    if (this.rows && this.now() - this.cachedAt < this.ttl) return Promise.resolve(this.rows);
+    const age = this.now() - this.cachedAt;
+    // Consumers read the cache again after a poll completes. A stale fallback must
+    // not immediately issue a second identical request during a provider outage.
+    const retryCoolingDown = this.lastErrorAt > 0 && this.now() - this.lastErrorAt < 5_000;
+    if (this.rows && (age < this.ttl || (retryCoolingDown && age < this.staleLimit))) {
+      return Promise.resolve(this.rows);
+    }
     if (this.pending) return this.pending;
     const generation = this.generation;
     const sessionGeneration = this.sessionGeneration;

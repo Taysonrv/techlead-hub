@@ -2,6 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { SnapshotCache, SnapshotInvalidatedError } from "../../frontend/src/services/snapshotCache";
 
+test("failed poll followed by subscriber reads keeps source time and avoids duplicate requests", async () => {
+  let time = 1_000;
+  let calls = 0;
+  const cache = new SnapshotCache(async () => {
+    if (++calls > 1) throw new Error("offline");
+    return [42];
+  }, () => time);
+  await cache.get();
+  time += 30_000;
+  assert.deepEqual(await cache.get(), [42]);
+  const state = cache.state();
+  assert.equal(state.cachedAt, 1_000);
+  assert.equal(state.lastErrorAt, 31_000);
+  assert.deepEqual(await cache.get(), [42]);
+  assert.equal(calls, 2);
+  time += 5_000;
+  await cache.get();
+  assert.equal(calls, 3);
+  time = 301_000;
+  await assert.rejects(cache.get(), /offline/);
+});
+
 test("snapshot shares concurrent requests and reloads after TTL", async () => {
   let time = 1_000;
   let calls = 0;

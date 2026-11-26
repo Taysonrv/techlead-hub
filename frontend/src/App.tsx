@@ -118,6 +118,7 @@ function AuthenticatedLayout({
       "/gestao-inteligencia/coordenacao": "Gestão · Coordenação",
       "/gestao-inteligencia/lideranca": "Gestão · Liderança Técnica",
       "/analistas": "Analistas",
+      "/visao-operacional/resultados-equipe": "Resultados da Equipe",
       "/clientes": "Clientes",
       "/desempenho": "Desempenho",
       "/atencao": "Pontos de Atenção",
